@@ -1,0 +1,10 @@
+/* src/styles.css —— 高对比大字号主题骨架 */
+:root {
+  --bg: #000; --fg: #ffd700; --accent: #fff;
+  --font-size: 20px;
+}
+html, body { margin: 0; background: var(--bg); color: var(--fg); font-size: var(--font-size); }
+[data-theme="hc"] { --bg: #000; --fg: #ffd700; }
+[data-theme="light"] { --bg: #fff; --fg: #000; }
+a, button, input, textarea { font-size: 1em; }
+#main-content:focus { outline: 3px solid var(--accent); }

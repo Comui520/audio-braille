@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AudioBraille 盲文学习平台</title>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">跳到主内容</a>
+  <nav aria-label="主导航">
+    <button data-page="teaching" aria-current="true">教学</button>
+    <button data-page="input">盲文输入器</button>
+    <button data-page="experiment">实验</button>
+    <button data-page="notes">笔记记录器</button>
+  </nav>
+  <main id="main-content" tabindex="-1" aria-live="polite"></main>
+  <div id="status" role="status" aria-live="polite"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
