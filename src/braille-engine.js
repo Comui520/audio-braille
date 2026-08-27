@@ -137,12 +137,46 @@ export function dotsToComponent(dotsArray) {
   return null
 }
 
-// 音节 → 方序列 [声母方, 韵母方, 声调方?]（先变读再取点位）
+// 音节 → 方序列 [声母方, 韵母方, 声调方?]（先变读再取点位，应用国家通用盲文声调省写）
+// 变读：g→j/k→q/h→x 在点位相同，但声调省写按书写声母分组（见 smartTone）
 export function syllableToDots(initial, final, tone) {
   const { initial: vi } = applyVariation(initial, final)
   const seq = [INITIALS[vi], FINALS[final]].filter(Boolean)
-  if (tone && TONES[tone]) seq.push(TONES[tone])
+  // 声调省写：返回 0 表示省写（不加声调方）
+  const reduced = applyToneReduction(initial, final, tone)
+  if (tone && TONES[tone] && reduced !== 0) seq.push(TONES[tone])
   return seq
+}
+
+// ===== 国家通用盲文声调省写（全标调 + 按声母省写）=====
+// 权威来源：国家通用盲文方案（GF 0019-2018）声调省写规则
+// 有 声母 时的省写分组（按书写声母）：
+//   f → 省阴平(1)
+//   p,m,t,n,h,q,ch,r,c → 省阳平(2)
+//   b,d,l,g,k,j,x,zh,sh,z,s → 省去声(4)
+// 韵母自成音节（零声母）= 省去声(4)
+// 返回：0 = 省写（不加声调方）；否则返回应保留的声调数字
+// 特例（简化实现，仅处理常用）：不见/wǒ/yě/yǒu 特殊，一律按规则
+const REDUCE_TONE1 = new Set(['f'])
+const REDUCE_TONE2 = new Set(['p', 'm', 't', 'n', 'h', 'q', 'ch', 'r', 'c'])
+const REDUCE_TONE4 = new Set(['b', 'd', 'l', 'g', 'k', 'j', 'x', 'zh', 'sh', 'z', 's'])
+
+export function applyToneReduction(initial, final, tone) {
+  if (!tone || !TONES[tone]) return 0   // 无调/轻声：本就无调方
+  if (!initial || initial === '') {
+    // 韵母自成音节：省去声(4)
+    return String(tone) === '4' ? 0 : tone
+  }
+  const t = String(tone)
+  if (t === '1' && REDUCE_TONE1.has(initial)) return 0
+  if (t === '2' && REDUCE_TONE2.has(initial)) return 0
+  if (t === '4' && REDUCE_TONE4.has(initial)) return 0
+  return tone
+}
+
+// 是否省写该声调（用于教学展示/考试判定）
+export function smartTone(initial, final, tone) {
+  return applyToneReduction(initial, final, tone)
 }
 
 // ===== 对照字表与转写 =====
