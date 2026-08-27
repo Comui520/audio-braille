@@ -485,7 +485,7 @@ import { HANZI_TABLE } from './data/hanzi-table.js'
 // 按 声母+韵母+声调 查对照字（先变读规范化）
 export function getReferences(initial, final, tone) {
   const { initial: vi } = applyVariation(initial, final)
-  return HANZI_TABLE[`${vi}:${tone || ''}`] ?? []
+  return HANZI_TABLE[`${vi}${final}:${tone || ''}`] ?? []
 }
 
 // 盲文方序列 → 汉字明文。

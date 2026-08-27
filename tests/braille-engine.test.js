@@ -3,7 +3,8 @@ import { describe, it, expect } from 'vitest'
 import {
   INITIALS, FINALS, TONES,
   dotsToUnicode, unicodeToDots,
-  applyVariation, syllableToDots, dotsToComponent
+  applyVariation, syllableToDots, dotsToComponent,
+  getReferences, transliterate
 } from '../src/braille-engine.js'
 
 describe('编码表（必须与规格第 2 节一致）', () => {
@@ -65,5 +66,21 @@ describe('syllableToDots / dotsToComponent 往返', () => {
   })
   it('未知点位返回 null（[5] 不在任何表中）', () => {
     expect(dotsToComponent([5])).toBe(null)
+  })
+})
+
+describe('对照字表与转写', () => {
+  it('getReferences 按声韵调索引返回常用字', () => {
+    const refs = getReferences('m', 'a', '1')
+    expect(refs).toContain('妈')
+    expect(refs).toContain('吗')
+  })
+  it('未知音节返回空数组', () => {
+    expect(getReferences('x', 'x', '1')).toEqual([])
+  })
+  it('transliterate 把盲文方序列转成汉字（同音取第一个）', () => {
+    // 妈(ma1) + 好(hao3)
+    const seq = [...syllableToDots('m', 'a', '1'), ...syllableToDots('h', 'ao', '3')]
+    expect(transliterate(seq)).toBe('妈好')
   })
 })

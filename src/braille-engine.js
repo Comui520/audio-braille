@@ -67,3 +67,35 @@ export function syllableToDots(initial, final, tone) {
   if (tone && TONES[tone]) seq.push(TONES[tone])
   return seq
 }
+
+// ===== 对照字表与转写 =====
+import { HANZI_TABLE } from './data/hanzi-table.js'
+
+// 按 声母+韵母+声调 查对照字（先变读规范化）
+export function getReferences(initial, final, tone) {
+  const { initial: vi } = applyVariation(initial, final)
+  return HANZI_TABLE[`${vi}${final}:${tone || ''}`] ?? []
+}
+
+// 盲文方序列 → 汉字明文。
+// 输入：[[1,3,4],[3,5],[1], ...]（每 2~3 方一个音节）。
+// 简策略：按 声母方+韵母方(+声调方) 分组，同音取字表第一个字。
+export function transliterate(dotsSequence) {
+  const out = []
+  let i = 0
+  while (i < dotsSequence.length) {
+    const c1 = dotsToComponent(dotsSequence[i])
+    const c2 = dotsToComponent(dotsSequence[i + 1])
+    if (c1?.type === 'initial' && c2?.type === 'final') {
+      const c3 = dotsToComponent(dotsSequence[i + 2])
+      const tone = c3?.type === 'tone' ? c3.value : null
+      const refs = getReferences(c1.value, c2.value, tone)
+      out.push(refs[0] ?? '')
+      i += tone ? 3 : 2
+    } else {
+      out.push('')   // 无法解析的一方（如标点/空格），占位
+      i += 1
+    }
+  }
+  return out.join('')
+}
