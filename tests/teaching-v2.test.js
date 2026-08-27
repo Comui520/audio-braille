@@ -1,8 +1,8 @@
-// tests/teaching-v2.test.js
+// tests/teaching-v2.test.js —— v5 兼容：保留错题本/评分核心测试
 import { describe, it, expect } from 'vitest'
-import { createReviewer, pickExamQuestion, gradeAnswer, pickItem, isLearnPhase } from '../src/teaching.js'
+import { createReviewer, pickExamQuestion, gradeAnswer, isLearnPhase } from '../src/teaching.js'
 
-describe('间隔重复错题本（保留 v1 逻辑）', () => {
+describe('间隔重复错题本（保留）', () => {
   it('错误 2 次加入错题本，连续正确 3 次移出', () => {
     const r = createReviewer()
     r.record('a', false)
@@ -28,25 +28,8 @@ describe('gradeAnswer 点位比较（顺序无关）', () => {
   })
 })
 
-describe('三阶段教学出题（英文优先）', () => {
-  it('学阶段：出单个字母，含名称/音频信息', () => {
-    const item = pickItem({ phase: 'learn', alphabet: 'abc', index: 0 })
-    expect(item.type).toBe('letter')
-    expect(item.label).toBe('a')
-    expect(item.dots).toEqual([1])
-    expect(item.latin).toBe('a')
-  })
-  it('练阶段：出字母，提示为名称', () => {
-    const item = pickItem({ phase: 'practice', alphabet: 'abc', index: 0 })
-    expect(item.type).toBe('letter')
-    expect(item.label).toBe('a')
-  })
-  it('考阶段：出字母，可出带调音节（英文模式不用调）', () => {
-    const item = pickItem({ phase: 'exam', alphabet: 'abc', index: 0 })
-    expect(item.type).toBe('letter')
-    expect(item.label).toBe('a')
-  })
-  it('isLearnPhase 判断学习阶段', () => {
+describe('isLearnPhase', () => {
+  it('判断学习阶段', () => {
     expect(isLearnPhase('learn')).toBe(true)
     expect(isLearnPhase('practice')).toBe(false)
     expect(isLearnPhase('exam')).toBe(false)
