@@ -81,10 +81,13 @@
 - [x] 规格 v2 已批准并 commit（`docs/superpowers/specs/2026-08-27-audiobraille-design.md`）
 - [x] 实现计划 11 任务已批准并 commit（`docs/superpowers/plans/2026-08-27-audiobraille.md`）
 - [x] **v3 重构完成（refactor-v3 分支）**：英文优先 + 三模块独立 + 学练考三阶段教学 + 听觉实验独立 + 语言切换 + 视觉美化
-- [x] v3 各子模块：i18n 双语 / 拉丁字母表 / 教学 v2 / 实验 v2 / 输入 v2 / 笔记 v2（明文对照）/ app v2 / styles v2
-- [x] 浏览器端到端验证：导航/语言切换/教学三阶段/输入器英文直出/笔记明文对照/实验 AB 组
-- [x] 单元测试 75 个全部通过（14 个测试文件）
-- [x] 生产构建成功（dist/ 27KB JS + 4.5KB CSS）
+- [x] **v5 规格已批准并 commit**（`docs/superpowers/specs/2026-08-27-audiobraille-v5-design.md`）
+- [x] **v5 计划已批准并 commit**（`docs/superpowers/plans/2026-08-27-audiobraille-v5.md`）
+- [x] **v5 执行完成（8 任务全过）**：符号盲文表 / 输入逐方确认(*//) / 教学四子模块 / 实验展示环节+四类辨识 / 听书(可调倍速) / 笔记双模式朗读 / 首页三入口+六页导航 / i18n 补全
+- [x] **国家通用盲文声调省写规则**（smartTone）：f省阴平/P组省阳平/b组省去声/韵母自成省去声（用户选择遵循国标）
+- [x] 单元测试 137 个全部通过（20 个测试文件）
+- [x] 生产构建成功（dist/ 37KB JS + 7.6KB CSS）
+- [x] 浏览器端到端验证：启动门/首页三入口/学习四子模块/输入反馈/实验四模式/听书页/语言一致
 - [ ] 任务 11：部署验证（Vercel）——待用户试用确认后部署
 
 **进度更新规则**：每完成一个任务，勾选本节对应项并 commit。
