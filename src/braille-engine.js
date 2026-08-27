@@ -51,7 +51,33 @@ export function applyVariation(initial, final) {
   return { initial, final }
 }
 
+// 拉丁字母盲文表（国际标准，Unicode 盲文）；与现行盲文声母同源
+// 权威来源：Unicode Braille Patterns / 维基百科英语盲文条目（已写入规格第 2 节对照）
+export const LATIN_LETTERS = {
+  a: [1], b: [1, 2], c: [1, 4], d: [1, 4, 5], e: [1, 5],
+  f: [1, 2, 4], g: [1, 2, 4, 5], h: [1, 2, 5], i: [2, 4], j: [2, 4, 5],
+  k: [1, 3], l: [1, 2, 3], m: [1, 3, 4], n: [1, 3, 4, 5], o: [1, 3, 5],
+  p: [1, 2, 3, 4], q: [1, 2, 3, 4, 5], r: [1, 2, 3, 5], s: [2, 3, 4], t: [2, 3, 4, 5],
+  u: [1, 3, 6], v: [1, 2, 3, 6], w: [2, 4, 5, 6], x: [1, 3, 4, 6], y: [1, 3, 4, 5, 6], z: [1, 3, 5, 6]
+}
+
+const LATIN_REVERSE = Object.fromEntries(Object.entries(LATIN_LETTERS).map(([k, v]) => [v.join(','), k]))
+
+export function latinToDots(letter) {
+  return LATIN_LETTERS[letter] ?? null
+}
+
+export function dotsToLatin(dots) {
+  return LATIN_REVERSE[[...dots].sort((a, b) => a - b).join(',')] ?? null
+}
+
+export function latinToUnicode(letter) {
+  const dots = LATIN_LETTERS[letter]
+  return dots ? dotsToUnicode(dots) : null
+}
+
 // 单方解析：先声母，再韵母，再声调（按点位精确匹配，避免前缀歧义）
+// 注意：不解析拉丁字母（避免与声母点位混淆）；英文模式用 dotsToLatin
 export function dotsToComponent(dotsArray) {
   const key = KEY(dotsArray)
   for (const [value, dots] of Object.entries(INITIALS)) if (KEY(dots) === key) return { type: 'initial', value }
