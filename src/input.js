@@ -53,9 +53,17 @@ export function buildSyllable(buffers, withTone) {
   return { initial, final, tone: tone?.type === 'tone' ? tone.value : null, dots: syllableToDots(init.value, fin.value, tone?.value) }
 }
 
-// 点位（数字数组）→ 可读字符（始终拉丁字母，不依赖语言——输入体验统一）
+// 点位（数字数组）→ 可读字符（优先拉丁字母，其次拼音成分）
 export function dotsToReadable(dots) {
-  return dotsToLatin(dots)
+  const latin = dotsToLatin(dots)
+  if (latin) return latin
+  const comp = dotsToComponent(dots)
+  if (comp) {
+    // 声母/韵母/声调：加类型标记便于区分
+    const marks = { initial: '声', final: '韵', tone: '调' }
+    return `${comp.value}(${marks[comp.type] || ''})`
+  }
+  return null
 }
 
 // DOM 接入：绑定全局 keydown（由 app.js 调用）
@@ -115,17 +123,26 @@ export function initInput({ state, render, settings }) {
           render()
           return
         }
-        // 盲文输入器/笔记：始终拉丁单方直出（输入体验装置，与语言无关）
+        // 盲文输入器/笔记：盲文直出——任何非空点位组合都是合法盲文方
+        // （拉丁字母/声母/韵母/声调/标点均可上屏，播报可读字符）
+        if (dots.length === 0) {
+          speak(t('noDots'))
+          render()
+          break
+        }
+        onInsert(dotsToUnicode(dots))
+        // 播报：优先拉丁字母，其次拼音成分名，最后报点位
         const latin = dotsToLatin(dots)
         if (latin) {
-          onInsert(dotsToUnicode(dots))
-          speak(latin)   // 仅 0 时播报
-          playAudioBraille(dots)
-          state.clearDots()
-          feedbackEl.textContent = ''
+          speak(latin)
         } else {
-          speak(t('invalidDots'))
+          const comp = dotsToComponent(dots)
+          if (comp) speak(comp.value)
+          else speak(`点${dots.join('、点')}`)
         }
+        playAudioBraille(dots)
+        state.clearDots()
+        feedbackEl.textContent = ''
         render()
         break
       }

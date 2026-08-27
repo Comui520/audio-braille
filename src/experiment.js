@@ -173,19 +173,24 @@ export function initExperiment({ state, render }) {
       const sec = document.createElement('section')
       sec.innerHTML = `<h1>${t('expTitle')}</h1>
         <div class="exp-modes">
-          <button data-exp-mode="letters">${t('expModeLetters')}</button>
-          <button data-exp-mode="syllables">${t('expModeSyllables')}</button>
-          <button data-exp-mode="symbols">${t('expModeSymbols')}</button>
-          <button data-exp-mode="digits">${t('expModeDigits')}</button>
+          <button data-exp-mode="letters" class="exp-mode-btn active">${t('expModeLetters')}</button>
+          <button data-exp-mode="syllables" class="exp-mode-btn">${t('expModeSyllables')}</button>
+          <button data-exp-mode="symbols" class="exp-mode-btn">${t('expModeSymbols')}</button>
+          <button data-exp-mode="digits" class="exp-mode-btn">${t('expModeDigits')}</button>
         </div>
-        <button data-exp="start">${t('expStart')}</button>
+        <button data-exp="start" class="btn-primary">▶ ${t('expStart')}</button>
         <div id="exp-status" aria-live="polite"></div>`
       return sec
     },
     bind(container) {
       container.querySelector('[data-exp="start"]')?.addEventListener('click', () => this.start())
       container.querySelectorAll('[data-exp-mode]').forEach(btn => {
-        btn.addEventListener('click', () => { mode = btn.dataset.expMode; render() })
+        btn.addEventListener('click', () => {
+          mode = btn.dataset.expMode
+          container.querySelectorAll('.exp-mode-btn').forEach(b => b.classList.remove('active'))
+          btn.classList.add('active')
+          render()
+        })
       })
     },
     start() {

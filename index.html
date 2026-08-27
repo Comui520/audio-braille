@@ -13,12 +13,13 @@
       <span class="brand-name">AudioBraille</span>
     </div>
     <nav aria-label="主导航" class="main-nav">
-      <button data-page="home" aria-current="true">首页</button>
-      <button data-page="teaching">学习</button>
-      <button data-page="input">输入</button>
-      <button data-page="experiment">测试</button>
-      <button data-page="notes">笔记</button>
-      <button data-page="reader">听书</button>
+      <button data-page="home" data-i18n="navHome" aria-current="true">首页</button>
+      <button data-page="guide" data-i18n="navGuide">说明</button>
+      <button data-page="teaching" data-i18n="navTeaching">学习</button>
+      <button data-page="input" data-i18n="navInput">输入</button>
+      <button data-page="experiment" data-i18n="navExperiment">测试</button>
+      <button data-page="notes" data-i18n="navNotes">笔记</button>
+      <button data-page="reader" data-i18n="navReader">听书</button>
     </nav>
     <div class="header-actions">
       <button id="lang-toggle" class="lang-btn" title="切换语言 Ctrl+Shift+L" aria-label="切换语言">
@@ -34,6 +35,7 @@
       <div class="gate-mark" aria-hidden="true">⠁⠃</div>
       <div class="gate-title">AudioBraille</div>
       <div class="gate-hint" id="gate-hint">请按 0 开始</div>
+      <div class="gate-guide" id="gate-guide"></div>
     </div>
   </div>
   <script type="module" src="/src/main.js"></script>

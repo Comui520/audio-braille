@@ -19,7 +19,7 @@ describe('AppState', () => {
 })
 
 describe('app 接口', () => {
-  it('buildPages 返回六个页面名（含首页/听书）', () => {
-    expect(buildPages()).toEqual(['home', 'teaching', 'input', 'experiment', 'notes', 'reader'])
+  it('buildPages 返回七个页面名（含首页/说明/听书）', () => {
+    expect(buildPages()).toEqual(['home', 'guide', 'teaching', 'input', 'experiment', 'notes', 'reader'])
   })
 })

@@ -5,6 +5,7 @@ import { initTeaching } from './teaching.js'
 import { initNotes } from './notes.js'
 import { initExperiment } from './experiment.js'
 import { createReader, SAMPLE_TEXT, clampSpeed } from './reader.js'
+import { guideView, buildGuideSpeech, renderQuickGuide } from './guide.js'
 import { unlockAudio } from './audio-braille.js'
 import { speak } from './speech.js'
 import { t, getLang, setLang } from './i18n.js'
@@ -30,7 +31,7 @@ export function createAppState() {
 }
 
 export function buildPages() {
-  return ['home', 'teaching', 'input', 'experiment', 'notes', 'reader']
+  return ['home', 'guide', 'teaching', 'input', 'experiment', 'notes', 'reader']
 }
 
 // ===== 视觉主题 =====
@@ -72,12 +73,14 @@ export function initApp() {
     sec.innerHTML = `
       <h1>${t('homeTitle')}</h1>
       <p class="home-sub">${t('homeSub')}</p>
+      ${renderQuickGuide()}
       <div class="home-cards">
+        <button class="home-card" data-nav="guide">❓<br>${t('navGuide')}</button>
         <button class="home-card" data-nav="teaching">📖<br>${t('navTeaching')}</button>
         <button class="home-card" data-nav="input">⌨️<br>${t('navInput')}</button>
-        <button class="home-card" data-nav="experiment">🎧<br>${t('navExperiment')}</button>
       </div>
       <div class="home-cards">
+        <button class="home-card" data-nav="experiment">🎧<br>${t('navExperiment')}</button>
         <button class="home-card" data-nav="notes">📝<br>${t('navNotes')}</button>
         <button class="home-card" data-nav="reader">📻<br>${t('navReader')}</button>
       </div>`
@@ -133,9 +136,15 @@ export function initApp() {
 
   // ===== 渲染 =====
   function render() {
+    // 更新导航文本（响应中英文切换）
     document.querySelectorAll('nav button').forEach(b => {
+      const key = b.dataset.i18n
+      if (key) b.textContent = t(key)
       b.setAttribute('aria-current', b.dataset.page === state.currentPage ? 'true' : 'false')
     })
+    // 更新品牌副标题
+    const brandSub = document.getElementById('brand-sub')
+    if (brandSub) brandSub.textContent = t('appName')
     dotsEl.setAttribute('aria-label',
       state.brailleDots.map((v, i) => (v ? `点${i + 1}` : '')).filter(Boolean).join('、') || t('dotsEmpty'))
     dotsEl.innerHTML = [...Array(6)].map((_, i) =>
@@ -157,7 +166,9 @@ export function initApp() {
       pageViews.reader = readerView()
       bindReader(pageViews.reader)
     }
-    const view = state.currentPage === 'home' ? homeView() : (pageViews[state.currentPage] ?? emptyView())
+    const view = state.currentPage === 'home' ? homeView()
+      : state.currentPage === 'guide' ? guideView()
+      : (pageViews[state.currentPage] ?? emptyView())
     main.replaceChildren(dotsEl, view)
     // 输入反馈条
     main.appendChild(input.feedbackEl)
@@ -208,6 +219,19 @@ export function initApp() {
     }
     if (e.target.closest('#note-save')) { void notes.save(); return }
     if (e.target.closest('#note-play')) { void notes.playback(); return }
+    if (e.target.closest('#note-new')) { notes.newNote(); return }
+    if (e.target.closest('#note-export')) { void notes.exportNote('json'); return }
+    if (e.target.closest('#note-import')) {
+      const fileInput = document.querySelector('#note-import-file')
+      fileInput?.click()
+      return
+    }
+    if (e.target.closest('#note-import-file')) {
+      const f = e.target.files?.[0]
+      if (f) void notes.importNote(f)
+      return
+    }
+    if (e.target.closest('#guide-speak')) { speak(buildGuideSpeech()); return }
     if (e.target.closest('[data-exp="start"]')) { experiment.start(); return }
   })
 
@@ -223,7 +247,13 @@ export function initApp() {
   // 启动门：全屏遮罩 + 键拦截，按 0 前无法进入/操作
   const gateEl = document.getElementById('start-gate')
   const gateHint = document.getElementById('gate-hint')
+  const gateGuide = document.getElementById('gate-guide')
   if (gateHint) gateHint.textContent = t('press0Start')
+  // 启动门内嵌简要使用说明（首次进入就能看到规则）
+  if (gateGuide) {
+    gateGuide.innerHTML = `<p class="gate-guide-text">${t('guideIntro')}</p>
+      <p class="gate-guide-text"><strong>${t('guideQuickTitle')}</strong>${t('guideQuick')}</p>`
+  }
 
   function unlockApp() {
     audioUnlocked = true

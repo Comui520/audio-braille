@@ -195,6 +195,69 @@ export function getReferences(initial, final, tone) {
   return HANZI_TABLE[key] ?? []
 }
 
+// ===== 盲文方序列 → 拼音（v6，供明文对照显示）=====
+// 声调符号映射：阴平1 阳平2 上声3 去声4
+const TONE_MARKED = {
+  '1': { a: 'ā', e: 'ē', i: 'ī', o: 'ō', u: 'ū', ü: 'ǖ' },
+  '2': { a: 'á', e: 'é', i: 'í', o: 'ó', u: 'ú', ü: 'ǘ' },
+  '3': { a: 'ǎ', e: 'ě', i: 'ǐ', o: 'ǒ', u: 'ǔ', ü: 'ǚ' },
+  '4': { a: 'à', e: 'è', i: 'ì', o: 'ò', u: 'ù', ü: 'ǜ' }
+}
+// 零声母书写：i→yi, u→wu, ü→yu
+const ZERO_INITIAL_SPELLING = { i: 'yi', u: 'wu', ü: 'yu' }
+
+// 给韵母加声调符号（主元音优先 a/o/e，其次 i/u/ü）
+export function applyToneMark(final, tone) {
+  if (!tone) return final
+  const marks = TONE_MARKED[tone]
+  if (!marks) return final
+  const letters = [...final]
+  // 优先 a/e/o，其次 i/u/ü
+  let idx = letters.findIndex(ch => 'aoe'.includes(ch))
+  if (idx === -1) idx = letters.findIndex(ch => 'iuv'.includes(ch))
+  if (idx === -1) return final
+  const base = letters[idx] === 'v' ? 'ü' : letters[idx]
+  const marked = marks[base]
+  if (!marked) return final
+  letters[idx] = marked
+  return letters.join('')
+}
+
+// 盲文方序列 → 拼音串（按 声母+韵母+声调 分组；零声母 yi/wu/yu；变读 g/k/h→j/q/x）
+// 无法解析的方用 · 占位
+// 返回：拼音串（如 "māhǎo"）
+export function dotsSeqToPinyin(dotsSequence) {
+  const out = []
+  let i = 0
+  while (i < dotsSequence.length) {
+    const cell = dotsSequence[i]
+    if (!Array.isArray(cell)) { out.push('·'); i++; continue }
+    const c1 = dotsToComponent(cell)
+    const c2 = Array.isArray(dotsSequence[i + 1]) ? dotsToComponent(dotsSequence[i + 1]) : null
+    if (c1?.type === 'initial' && c2?.type === 'final') {
+      // 声母 + 韵母 (+ 声调)
+      const c3 = Array.isArray(dotsSequence[i + 2]) ? dotsToComponent(dotsSequence[i + 2]) : null
+      const tone = c3?.type === 'tone' ? c3.value : null
+      // 变读：g/k/h 与 i/ü 相拼 → j/q/x
+      const { initial } = applyVariation(c1.value, c2.value)
+      const pinyin = initial + applyToneMark(c2.value, tone)
+      out.push(pinyin)
+      i += tone ? 3 : 2
+    } else if (c1?.type === 'final') {
+      // 零声母：韵母自成音节（+ 声调）
+      const c2t = c2
+      const tone = c2t?.type === 'tone' ? c2t.value : null
+      const base = ZERO_INITIAL_SPELLING[c1.value] || c1.value
+      out.push(applyToneMark(base, tone))
+      i += tone ? 2 : 1
+    } else {
+      out.push('·')
+      i += 1
+    }
+  }
+  return out.join('')
+}
+
 // 盲文方序列 → 汉字明文。
 // 输入：[[1,3,4],[3,5],[1], ...]（每 2~3 方一个音节）。
 // 简策略：按 声母方+韵母方(+声调方) 分组；韵母可自成音节（零声母）。同音取字表第一个字。

@@ -32,9 +32,19 @@ describe('明文对照显示（v2 新增）', () => {
     expect(refs[1].char).toBe('g')
     expect(refs[0].unicode).toBe('\u280d')
   })
-  it('中文模式：无法解析的方 char 为 null', () => {
+  it('中文模式：也显示拉丁字母（国际标准）', () => {
     mem.set('AudioBraille.lang', 'zh')
     const refs = buildPlainReference([[1, 3, 4]])
+    expect(refs[0].char).toBe('m')
+  })
+  it('数字符号方（3456）显示为 #', () => {
+    mem.set('AudioBraille.lang', 'zh')
+    const refs = buildPlainReference([[3, 4, 5, 6]])
+    expect(refs[0].char).toBe('#')
+  })
+  it('无法解析的方 char 为 null', () => {
+    mem.set('AudioBraille.lang', 'zh')
+    const refs = buildPlainReference([[5]])
     expect(refs[0].char).toBeNull()
   })
 })

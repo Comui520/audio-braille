@@ -1,7 +1,7 @@
 // src/notes.js —— v5：笔记记录器（明文对照 + 双模式朗读）
 // 明文对照：输入盲文的同时，在下方显示对应的拉丁字母/拼音（方便不懂盲文的人验证）
 // 双模式朗读：①盲文转文字 → TTS 读 ②直接 AudioBraille 逐方播放，速度可调
-import { dotsToUnicode, unicodeToDots, dotsToLatin } from './braille-engine.js'
+import { dotsToUnicode, unicodeToDots, dotsToLatin, dotsSeqToPinyin } from './braille-engine.js'
 import { speak } from './speech.js'
 import { t, getLang } from './i18n.js'
 
@@ -27,13 +27,24 @@ export function plainToSpeech(text) {
   }).join(' ')
 }
 
-// 明文对照：把盲文方序列转成拉丁字母（英文模式）或拼音（中文模式）
+// 明文对照：把盲文方序列转成拉丁字母（英文模式）或拼音/数字（中文模式）
 // 返回逐方对照数组：{ unicode, char }（char 为 null 表示无法解析）
+// 中文模式：拉丁字母（a-z 是国际标准字母）也显示，数字符号+字母转成数字
 export function buildPlainReference(dotsSeq) {
-  return dotsSeq.map(d => ({
-    unicode: dotsToUnicode(d),
-    char: getLang() === 'en' ? dotsToLatin(d) : null
-  }))
+  return dotsSeq.map(d => {
+    // 数字符号 3456（不在拉丁字母表内）→ 标记为数字引导 #
+    const isDigitSign = d.length === 4 && [3, 4, 5, 6].every(p => d.includes(p))
+    if (isDigitSign) return { unicode: dotsToUnicode(d), char: '#' }
+    const latin = dotsToLatin(d)
+    return { unicode: dotsToUnicode(d), char: latin || null }
+  })
+}
+
+// 中文明文对照：整串盲文 → 带调拼音（v6）
+// 例：⠍⠔⠁ → "mā"；无法解析的方用 · 占位
+export function buildPinyinReference(dotsSeq) {
+  if (!dotsSeq.length) return ''
+  return dotsSeqToPinyin(dotsSeq)
 }
 
 // —— 笔记 UI（由 app.js 调用）——
@@ -48,21 +59,42 @@ export function initNotes({ state, storage, render }) {
         <h1>${t('notesTitle')}</h1>
         <textarea id="note-textarea" rows="10" aria-label="笔记内容"></textarea>
         <div id="note-reference" aria-live="polite" class="note-reference"></div>
-        <button id="note-save">${t('notesSave')}</button>
-        <button id="note-play">${t('notesPlay')}</button>
+        <div class="note-actions">
+          <button id="note-save">${t('notesSave')}</button>
+          <button id="note-play">${t('notesPlay')}</button>
+          <button id="note-export">${t('notesExport')}</button>
+          <button id="note-import">${t('notesImport')}</button>
+          <button id="note-new">${t('notesNew')}</button>
+        </div>
+        <input type="file" id="note-import-file" accept=".json,.brf" hidden>
       `
       return sec
     },
     // 明文对照更新（由 app.js 在每次上屏后调用）
+    // 中文模式：显示带调拼音（如 mā）；英文模式：逐方拉丁字母
     updateReference() {
       const ta = document.querySelector('#note-textarea')
       const refEl = document.querySelector('#note-reference')
       if (!ta || !refEl) return
       const dotsSeq = extractDotsFromText(ta.value)
-      const refs = buildPlainReference(dotsSeq)
-      refEl.innerHTML = refs.length
-        ? `<strong>${t('plainLabel')}：</strong>` + refs.map(r => r.char ? `<span class="ref-char">${r.char}</span>` : `<span class="ref-char ref-unknown">${r.unicode}</span>`).join(' ')
-        : ''
+      if (!dotsSeq.length) { refEl.innerHTML = ''; return }
+      if (getLang() === 'en') {
+        // 英文：逐方字母卡片
+        const refs = buildPlainReference(dotsSeq)
+        refEl.innerHTML = `<strong>${t('plainLabel')}：</strong>` +
+          refs.map(r => r.char
+            ? `<span class="ref-char">${r.char}</span>`
+            : `<span class="ref-char ref-unknown">${r.unicode}</span>`).join(' ')
+      } else {
+        // 中文：带调拼音串 + 逐方字母对照
+        const pinyin = buildPinyinReference(dotsSeq)
+        const refs = buildPlainReference(dotsSeq)
+        refEl.innerHTML = `<strong>${t('pinyinLabel')}：</strong><span class="ref-pinyin">${pinyin}</span>` +
+          `<br><strong>${t('plainLabel')}：</strong>` +
+          refs.map(r => r.char
+            ? `<span class="ref-char">${r.char}</span>`
+            : `<span class="ref-char ref-unknown">${r.unicode}</span>`).join(' ')
+      }
     },
     async save() {
       const textarea = document.querySelector('#note-textarea')
@@ -88,6 +120,54 @@ export function initNotes({ state, storage, render }) {
       const refEl = document.querySelector('#note-reference')
       if (refEl) refEl.innerHTML = ''
       ta.focus()
+    },
+    // 导出：JSON（当前笔记）或 BRF（盲文文本）
+    async exportNote(format = 'json') {
+      const ta = document.querySelector('#note-textarea')
+      const text = ta?.value || ''
+      const dotsSeq = extractDotsFromText(text)
+      const blob = format === 'brf'
+        ? new Blob([dotsSeq.map(d => d.join('') || ' ').join(' ') + '\n' + text.replace(/[\u2800-\u28ff]/g, ' ').trim() + '\n'], { type: 'text/plain' })
+        : new Blob([JSON.stringify({ app: 'AudioBraille', version: 1, note: { title: new Date().toLocaleString(), plain: text, dotsSeq } }, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `note.${format}`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      speak(t('notesExported'))
+    },
+    // 导入：从文件读取 JSON/BRF
+    async importNote(file) {
+      if (!file) return
+      const text = await file.text()
+      if (file.name.endsWith('.brf')) {
+        // BRF：首行盲文点位，次行明文
+        const lines = text.split('\n').filter(l => l.trim() !== '')
+        const dotsSeq = lines[0]?.split(' ').map(c => (c.trim() === '' ? [] : [...c].map(Number))).filter(c => c.length > 0) || []
+        const plain = lines[1] || ''
+        const ta = document.querySelector('#note-textarea')
+        if (ta) {
+          ta.value = dotsSeq.map(d => dotsToUnicode(d)).join('') + (plain ? '\n' + plain : '')
+          current = { id: null, title: '', plain: ta.value, dotsSeq }
+          this.updateReference()
+        }
+      } else {
+        // JSON
+        const data = JSON.parse(text)
+        const note = data.note || data.notes?.[0]
+        if (note) {
+          const ta = document.querySelector('#note-textarea')
+          if (ta) {
+            ta.value = note.plain || ''
+            current = { id: null, title: note.title || '', plain: note.plain || '', dotsSeq: note.dotsSeq || [] }
+            this.updateReference()
+          }
+        }
+      }
+      speak(t('notesImported'))
     },
     async playback() {
       const dotsSeq = extractDotsFromText(current.plain)
