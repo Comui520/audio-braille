@@ -72,6 +72,8 @@ export function initApp() {
       `<span class="dot ${state.brailleDots[i] ? 'on' : ''}" style="grid-area:d${i + 1}"></span>`
     ).join('')
     main.replaceChildren(dotsEl, pageViews[state.currentPage] ?? emptyView())
+    // 输入反馈条（按点位键实时显示 组合→字母）
+    main.appendChild(input.feedbackEl)
     // 语言切换后重建视图文案
     if (state.currentPage === 'notes') notes.updateReference?.()
   }
@@ -108,8 +110,8 @@ export function initApp() {
   pageViews.notes = notes.view()
   teaching.bind(pageViews.teaching)
   experiment.bind(pageViews.experiment)
-  input.setTeachingConfirm((dots) => teaching.handleConfirm(dots))
-  input.setExperimentConfirm((dots) => experiment.handleConfirm(dots))
+  input.setTeachingSubmit((dots) => teaching.handleConfirm(dots))
+  input.setExperimentSubmit((dots) => experiment.submitGuess(dots))
 
   // 页面级按钮：教学阶段切换、笔记保存/回放、实验开始
   document.addEventListener('click', (e) => {

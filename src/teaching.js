@@ -1,20 +1,19 @@
-// src/teaching.js —— v2：学→练→考 三阶段教学（英文优先）
-// 核心：教学要教会不会的人——先学（名称+音频+点位展示），再练（有提示出题），后考（考核+错题复习）
+// src/teaching.js —— v3：学→练→考（英文优先，明确反馈）
+// 学：告诉"要输入 a 就按 7"（键位 → 字母 逐点教学）
+// 练：出题"打出 a"，按点位 → 实时说当前组合对应的字母 → 0 提交判定
+// 考：出题（顺序字母/随机），0 提交 → 判定 + 错题复习
 import { speak } from './speech.js'
 import { t, getLang } from './i18n.js'
 import { LATIN_LETTERS, latinToDots, dotsToLatin, latinToUnicode } from './braille-engine.js'
 import { playAudioBraille } from './audio-braille.js'
 
 // —— 间隔重复错题本（纯逻辑，可测）——
-// 规则：错误≥2 加入；每 5 题插 1 错题；连续正确 3 次移出。
 export function createReviewer() {
-  const map = new Map()   // key → { errors, streak }
-
+  const map = new Map()
   function entry(key) {
     if (!map.has(key)) map.set(key, { errors: 0, streak: 0 })
     return map.get(key)
   }
-
   return {
     record(key, correct) {
       const e = entry(key)
@@ -31,95 +30,79 @@ export function createReviewer() {
   }
 }
 
-// —— 考试出题（纯逻辑）——
-// 每 5 题（index%5===4）强制插入错题本中的题目
 export function pickExamQuestion({ index, reviewQueue }) {
-  if (index % 5 === 4 && reviewQueue.length > 0) {
-    return reviewQueue[index % reviewQueue.length]
-  }
-  return null   // 返回 null 表示从常规题库随机出题（UI 层处理）
+  if (index % 5 === 4 && reviewQueue.length > 0) return reviewQueue[index % reviewQueue.length]
+  return null
 }
 
-// —— 评分（点位数组无序比较）——
 export function gradeAnswer(expected, given) {
   if (expected.length !== given.length) return false
   const s = (a) => [...a].sort((x, y) => x - y).join(',')
   return s(expected) === s(given)
 }
 
-// —— 出题（纯逻辑，可测）——
-// alphabet: 教学字母表（英文：abcdefghijklmnopqrstuvwxyz）
-// phase: learn(学) | practice(练) | exam(考)
-// index: 当前题号（从 0 开始）
-export function pickItem({ phase, alphabet, index }) {
+export function isLearnPhase(phase) { return phase === 'learn' }
+
+// 出题：学/练按顺序；考：错题优先 + 随机
+export function pickItem({ phase, alphabet, index, reviewQueue }) {
   const letters = alphabet || 'abcdefghijklmnopqrstuvwxyz'
+  if (phase === 'exam' && reviewQueue && reviewQueue.length > 0) {
+    const q = pickExamQuestion({ index, reviewQueue })
+    if (q) {
+      const letter = q.replace('letter:', '')
+      return { type: 'letter', label: letter, latin: letter, dots: latinToDots(letter), phase }
+    }
+  }
   const letter = letters[index % letters.length]
-  const dots = latinToDots(letter)
-  return { type: 'letter', label: letter, latin: letter, dots, phase }
+  return { type: 'letter', label: letter, latin: letter, dots: latinToDots(letter), phase }
 }
 
-export function isLearnPhase(phase) {
-  return phase === 'learn'
+// 键位 → 字母 教学提示（学阶段：教"想输入 a 按 7"）
+// 官方键位：7=点1, 4=点2, 1=点3, 8=点4, 5=点5, 2=点6
+export function keyHintForDots(dots) {
+  const KEY_FOR_DOT = { 1: '7', 2: '4', 3: '1', 4: '8', 5: '5', 6: '2' }
+  return dots.map(d => KEY_FOR_DOT[d]).join('、')
 }
 
-// —— 教学 UI（学→练→考，键盘驱动）——
-// 由 app.js 调用；依赖 state/render/speak/playAudioBraille
+// —— 教学 UI ——
 export function initTeaching({ state, render, storage }) {
   const reviewer = createReviewer()
   const ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
-  // 当前课程状态
-  let phase = 'learn'           // learn | practice | exam
-  let currentItem = null        // 当前题目 {type, label, latin, dots}
-  let examIndex = 0             // 考试题号（0..9）
+  let phase = 'learn'
+  let currentItem = null
+  let examIndex = 0
   let examCorrect = 0
-  let examTotal = 0             // 10 题一轮
-  let lessonEl = null           // 出题区 DOM
+  let examTotal = 0
+  let lessonEl = null
 
-  // —— 出题 ——
-  function pick() {
-    if (phase === 'exam') {
-      // 考试：错题优先（每 5 题插 1），否则按顺序出字母
-      const q = pickExamQuestion({ index: examIndex, reviewQueue: reviewer.reviewQueue() })
-      if (q) {
-        const letter = q.replace('letter:', '')
-        const dots = latinToDots(letter)
-        return { type: 'letter', label: letter, latin: letter, dots, phase }
-      }
-      return pickItem({ phase, alphabet: ALPHABET, index: examIndex })
-    }
-    // 学/练：按字母表顺序学习
-    const idx = currentItem ? ALPHABET.indexOf(currentItem.label) + 1 : 0
-    return pickItem({ phase, alphabet: ALPHABET, index: idx % 26 })
-  }
+  function setLesson(msg) { if (lessonEl) lessonEl.textContent = msg }
 
-  // —— 下一题 / 结束 ——
   function next() {
     if (phase === 'exam' && examTotal >= 10) {
       const acc = Math.round((examCorrect / examTotal) * 100)
-      speak(t('examOver', { accuracy: acc }))
-      setLesson(t('examOver', { accuracy: acc }))
+      const msg = t('examOver', { accuracy: String(acc) })
+      speak(msg)
+      setLesson(msg)
       examIndex = 0; examCorrect = 0; examTotal = 0
       return
     }
-    currentItem = pick()
+    currentItem = pickItem({ phase, alphabet: ALPHABET, index: examIndex, reviewQueue: phase === 'exam' ? reviewer.reviewQueue() : [] })
+    const L = currentItem.label
     if (phase === 'learn') {
-      speak(`${t('learnItem', { label: currentItem.label })}，${t('press0Check')}`)
-      setLesson(`${t('learnItem', { label: currentItem.label })}（${t('press0Check')}）`)
+      // 教：说明键位 → 字母
+      const hint = keyHintForDots(currentItem.dots)
+      speak(t('learnItem', { label: L, hint }))
+      setLesson(`${t('learnItem', { label: L, hint })}`)
     } else if (phase === 'practice') {
-      speak(`${t('practiceItem', { label: currentItem.label })}`)
-      setLesson(`${t('practiceItem', { label: currentItem.label })}`)
+      speak(`${t('practiceItem', { label: L })}`)
+      setLesson(`${t('practiceItem', { label: L })}`)
     } else {
-      speak(`${t('q', { label: currentItem.label })}，${t('press0Submit')}`)
-      setLesson(`${t('q', { label: currentItem.label })}（${t('press0Submit')}）`)
-    }
-    // 学阶段：播放音频 + 显示点位
-    if (phase === 'learn') {
-      playAudioBraille(currentItem.dots)
+      speak(`${t('q', { label: L })}，${t('press0Submit')}`)
+      setLesson(`${t('q', { label: L })}（${t('press0Submit')}）`)
     }
     state.clearDots()
   }
 
-  // —— 核对答案（按 0 时调用）——
   function checkAnswer(dots) {
     if (!currentItem) return
     const correct = gradeAnswer(currentItem.dots, dots)
@@ -129,16 +112,13 @@ export function initTeaching({ state, render, storage }) {
       reviewer.record(key, true)
       if (phase === 'exam') { examCorrect++; examTotal++ }
     } else {
-      speak(t('wrongAnswer', { expected: currentItem.label }))
+      const hint = keyHintForDots(currentItem.dots)
+      speak(t('wrongAnswer', { expected: `${currentItem.label}（键位：${hint}）` }))
       reviewer.record(key, false)
       if (phase === 'exam') { examTotal++ }
     }
     state.clearDots()
     setTimeout(next, 400)
-  }
-
-  function setLesson(msg) {
-    if (lessonEl) lessonEl.textContent = msg
   }
 
   return {
@@ -151,10 +131,7 @@ export function initTeaching({ state, render, storage }) {
       currentItem = null
       next()
     },
-    // 供 app.js 在按 0 时调用
-    handleConfirm(dots) {
-      if (currentItem) checkAnswer(dots)
-    },
+    handleConfirm(dots) { if (currentItem) checkAnswer(dots) },
     view() {
       const sec = document.createElement('section')
       sec.innerHTML = `<h1>${t('lessonTitle')}</h1>

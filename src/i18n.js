@@ -81,7 +81,7 @@ const MESSAGES = {
     settingsTitle: '设置',
     langLabel: '语言',
     // 探索/学习
-    learnItem: (v) => `请学习字母 ${v.label}`,
+    learnItem: (v) => `请学习字母 ${v.label}：按 ${v.hint} 键`,
     practiceItem: (v) => `请打出字母 ${v.label}，按 0 提交`,
     q: (v) => `请打出字母 ${v.label}`,
     wrongAnswer: (v) => `错误，正确答案是 ${v.expected}`,
@@ -142,7 +142,7 @@ const MESSAGES = {
     dotsEmpty: 'Empty',
     settingsTitle: 'Settings',
     langLabel: 'Language',
-    learnItem: (v) => `Learn the letter ${v.label}`,
+    learnItem: (v) => `Learn letter ${v.label}: press key ${v.hint}`,
     practiceItem: (v) => `Type the letter ${v.label}, press 0 to submit`,
     q: (v) => `Type the letter ${v.label}`,
     wrongAnswer: (v) => `Wrong, the answer is ${v.expected}`,
