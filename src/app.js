@@ -1,4 +1,4 @@
-// src/app.js —— 完整版（任务 10：模块整合与无障碍收尾）
+// src/app.js —— v2：三模块独立（教学/输入+笔记/听觉实验）+ 语言切换 + 视觉美化
 import { createStorage, loadSettings, saveSettings } from './storage.js'
 import { initInput } from './input.js'
 import { initTeaching } from './teaching.js'
@@ -6,6 +6,7 @@ import { initNotes } from './notes.js'
 import { initExperiment } from './experiment.js'
 import { unlockAudio } from './audio-braille.js'
 import { speak } from './speech.js'
+import { t, getLang, setLang } from './i18n.js'
 
 // ===== AppState =====
 export function createAppState() {
@@ -22,7 +23,6 @@ export function createAppState() {
     },
     clearDots() {
       state.brailleDots = [false, false, false, false, false, false]
-      // 不重置 inputStage —— 由 input.js 的确认/退格流程显式管理阶段
     }
   }
   return state
@@ -32,12 +32,25 @@ export function buildPages() {
   return ['teaching', 'input', 'experiment', 'notes']
 }
 
+// ===== 视觉主题 =====
+const THEMES = {
+  hc: { name: '高对比', css: '--bg:#0a0a0a;--fg:#ffd700;--accent:#4fc3f7;--card:#1a1a1a;--border:#333' },
+  light: { name: '明亮', css: '--bg:#fafafa;--fg:#1a1a1a;--accent:#1565c0;--card:#fff;--border:#ddd' },
+  ocean: { name: '海洋', css: '--bg:#0d2137;--fg:#e0f2fe;--accent:#4fc3f7;--card:#13324f;--border:#1e4a6d' }
+}
+function applyTheme(theme) {
+  const t = THEMES[theme] || THEMES.hc
+  document.documentElement.style.cssText = t.css
+  document.documentElement.dataset.theme = theme
+}
+
 export function initApp() {
   const state = createAppState()
   const storage = createStorage()
   storage.init().then(() => {
     const saved = loadSettings()
     if (saved) Object.assign(state.settings, saved)
+    applyTheme(state.settings.theme)
   })
 
   const main = document.getElementById('main-content')
@@ -46,7 +59,7 @@ export function initApp() {
 
   // 页面视图注册表
   const pageViews = {}
-  const emptyView = () => Object.assign(document.createElement('section'), { textContent: '请选择模块' })
+  const emptyView = () => Object.assign(document.createElement('section'), { textContent: t('empty') })
 
   // ===== 渲染 =====
   function render() {
@@ -54,11 +67,13 @@ export function initApp() {
       b.setAttribute('aria-current', b.dataset.page === state.currentPage ? 'true' : 'false')
     })
     dotsEl.setAttribute('aria-label',
-      state.brailleDots.map((v, i) => (v ? `点${i + 1}` : '')).filter(Boolean).join('、') || '空')
+      state.brailleDots.map((v, i) => (v ? `点${i + 1}` : '')).filter(Boolean).join('、') || t('dotsEmpty'))
     dotsEl.innerHTML = [...Array(6)].map((_, i) =>
       `<span class="dot ${state.brailleDots[i] ? 'on' : ''}" style="grid-area:d${i + 1}"></span>`
     ).join('')
     main.replaceChildren(dotsEl, pageViews[state.currentPage] ?? emptyView())
+    // 语言切换后重建视图文案
+    if (state.currentPage === 'notes') pageViews.notes?.updateReference?.()
   }
 
   // ===== 输入器接线 =====
@@ -70,6 +85,8 @@ export function initApp() {
       const s = ta.selectionStart ?? ta.value.length
       ta.value = ta.value.slice(0, s) + text + ta.value.slice(ta.selectionEnd ?? s)
       ta.focus()
+      // 明文对照更新
+      pageViews.notes?.updateReference?.()
     }
   })
   input.setBackspaceHandler(() => {
@@ -77,6 +94,7 @@ export function initApp() {
     if (ta && 'selectionStart' in ta && ta.selectionStart > 0) {
       ta.value = ta.value.slice(0, ta.selectionStart - 1) + ta.value.slice(ta.selectionEnd)
       ta.focus()
+      pageViews.notes?.updateReference?.()
     }
   })
 
@@ -93,7 +111,7 @@ export function initApp() {
   input.setTeachingConfirm((dots) => teaching.handleConfirm(dots))
   input.setExperimentConfirm((dots) => experiment.handleConfirm(dots))
 
-  // 页面级按钮：教学模式切换、笔记保存/回放、实验开始
+  // 页面级按钮：教学阶段切换、笔记保存/回放、实验开始
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-mode]')
     if (btn) {
@@ -105,8 +123,6 @@ export function initApp() {
     if (e.target.closest('#note-play')) { void notes.playback(); return }
     if (e.target.closest('[data-exp="start"]')) { experiment.start(); return }
   })
-  teaching.bind(pageViews.teaching)
-  experiment.bind(pageViews.experiment)
 
   // 导航切换（键盘 Tab + Enter 原生支持 button）
   document.querySelectorAll('nav button').forEach(btn => {
@@ -121,20 +137,44 @@ export function initApp() {
   const unlockOnce = () => {
     window.removeEventListener('keydown', unlockOnce)
     unlockAudio()
-    speak('音频引擎已就绪')
+    speak(t('audioReady'))
   }
   window.addEventListener('keydown', unlockOnce)
+
+  // 语言切换按钮（顶栏）
+  const langBtn = document.getElementById('lang-toggle')
+  if (langBtn) {
+    langBtn.addEventListener('click', () => toggleLang())
+  }
+
+  function toggleLang() {
+    const next = getLang() === 'en' ? 'zh' : 'en'
+    setLang(next)
+    speak(t('langChanged') + ' ' + (next === 'en' ? 'English' : '中文'))
+    // 重建当前页视图（更新文案）
+    pageViews.teaching = teaching.view()
+    pageViews.experiment = experiment.view()
+    pageViews.notes = notes.view()
+    teaching.bind(pageViews.teaching)
+    experiment.bind(pageViews.experiment)
+    render()
+  }
 
   // 全局快捷键
   window.addEventListener('keydown', (e) => {
     if (e.key === 'F1') {
       e.preventDefault()
-      speak('按 0 确认送字。按 3 退格。按减号清空。按加号朗读。按句号空格。F1 帮助。Ctrl 加 Shift 加 M 静音。')
+      speak(t('help'))
     }
     if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'm') {
       state.settings.silentMode = !state.settings.silentMode
       saveSettings(state.settings)
-      speak(state.settings.silentMode ? '静音模式开启' : '静音模式关闭')
+      speak(state.settings.silentMode ? t('silentOn') : t('silentOff'))
+    }
+    // 语言切换：Ctrl+Shift+L
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'l') {
+      e.preventDefault()
+      toggleLang()
     }
     if (e.ctrlKey && e.key.toLowerCase() === 's') {
       e.preventDefault()
@@ -153,10 +193,10 @@ export function initApp() {
   // 历史笔记列表（Ctrl+O：上下键选择，Enter 打开）
   async function openHistory() {
     const list = await notes.list()
-    if (list.length === 0) { speak('没有历史笔记'); return }
+    if (list.length === 0) { speak(t('notesNoHistory')); return }
     const panel = Object.assign(document.createElement('div'), { id: 'history-panel' })
     panel.setAttribute('role', 'listbox')
-    panel.setAttribute('aria-label', '历史笔记')
+    panel.setAttribute('aria-label', t('notesTitle'))
     panel.innerHTML = list.map((n, i) =>
       `<div role="option" tabindex="-1" data-id="${n.id}" data-idx="${i}">${n.title} — ${(n.plain || '').slice(0, 20)}</div>`
     ).join('')
@@ -175,7 +215,7 @@ export function initApp() {
       else if (ev.key === 'Enter') {
         ev.preventDefault(); close()
         void notes.open(options[idx].dataset.id)
-        speak('已打开' + options[idx].textContent)
+        speak(t('notesOpened') + ' ' + options[idx].textContent)
       }
       else if (ev.key === 'Escape') { close() }
     }
@@ -184,6 +224,6 @@ export function initApp() {
   }
 
   main.focus()
-  speak('欢迎来到 AudioBraille 盲文学习平台')
+  speak(t('welcome'))
   render()
 }
