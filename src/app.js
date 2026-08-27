@@ -1,9 +1,10 @@
-// src/app.js —— v2：三模块独立（教学/输入+笔记/听觉实验）+ 语言切换 + 视觉美化
+// src/app.js —— v5：首页三入口 + 六页导航（学习/输入/测试/笔记/听书）
 import { createStorage, loadSettings, saveSettings } from './storage.js'
 import { initInput } from './input.js'
 import { initTeaching } from './teaching.js'
 import { initNotes } from './notes.js'
 import { initExperiment } from './experiment.js'
+import { createReader, SAMPLE_TEXT, clampSpeed } from './reader.js'
 import { unlockAudio } from './audio-braille.js'
 import { speak } from './speech.js'
 import { t, getLang, setLang } from './i18n.js'
@@ -11,9 +12,9 @@ import { t, getLang, setLang } from './i18n.js'
 // ===== AppState =====
 export function createAppState() {
   const state = {
-    currentPage: 'teaching',            // teaching | input | experiment | notes
+    currentPage: 'home',            // home | teaching | input | experiment | notes | reader
     brailleDots: [false, false, false, false, false, false],
-    inputStage: 'initial',              // initial | final | tone | commit
+    inputStage: 'initial',
     learningProgress: { level: 1, records: {} },
     notes: [],
     settings: { clickSound: true, silentMode: false, theme: 'hc', fontSize: 20, toneMode: true },
@@ -29,18 +30,18 @@ export function createAppState() {
 }
 
 export function buildPages() {
-  return ['teaching', 'input', 'experiment', 'notes']
+  return ['home', 'teaching', 'input', 'experiment', 'notes', 'reader']
 }
 
 // ===== 视觉主题 =====
 const THEMES = {
-  hc: { name: '高对比', css: '--bg:#0a0a0a;--fg:#ffd700;--accent:#4fc3f7;--card:#1a1a1a;--border:#333' },
-  light: { name: '明亮', css: '--bg:#fafafa;--fg:#1a1a1a;--accent:#1565c0;--card:#fff;--border:#ddd' },
-  ocean: { name: '海洋', css: '--bg:#0d2137;--fg:#e0f2fe;--accent:#4fc3f7;--card:#13324f;--border:#1e4a6d' }
+  hc: { css: '--bg:#0b1220;--bg-soft:#0f172a;--fg:#e2e8f0;--accent:#38bdf8;--accent-2:#818cf8;--card:#1e293b;--border:#334155;--muted:#94a3b8' },
+  light: { css: '--bg:#f6f8fb;--bg-soft:#fff;--fg:#1a202c;--accent:#2563eb;--accent-2:#7c3aed;--card:#fff;--border:#e2e8f0;--muted:#64748b' },
+  ocean: { css: '--bg:#04121f;--bg-soft:#062438;--fg:#dbeafe;--accent:#22d3ee;--accent-2:#818cf8;--card:#0a2e44;--border:#155e75;--muted:#7dd3fc' }
 }
 function applyTheme(theme) {
-  const t = THEMES[theme] || THEMES.hc
-  document.documentElement.style.cssText = t.css
+  const th = THEMES[theme] || THEMES.hc
+  document.documentElement.style.cssText = th.css
   document.documentElement.dataset.theme = theme
 }
 
@@ -64,6 +65,72 @@ export function initApp() {
   // 启动门状态（必须先按 0 解锁音频与语音）
   let audioUnlocked = false
 
+  // ===== 首页（三入口卡片）=====
+  function homeView() {
+    const sec = document.createElement('section')
+    sec.className = 'home'
+    sec.innerHTML = `
+      <h1>${t('homeTitle')}</h1>
+      <p class="home-sub">${t('homeSub')}</p>
+      <div class="home-cards">
+        <button class="home-card" data-nav="teaching">📖<br>${t('navTeaching')}</button>
+        <button class="home-card" data-nav="input">⌨️<br>${t('navInput')}</button>
+        <button class="home-card" data-nav="experiment">🎧<br>${t('navExperiment')}</button>
+      </div>
+      <div class="home-cards">
+        <button class="home-card" data-nav="notes">📝<br>${t('navNotes')}</button>
+        <button class="home-card" data-nav="reader">📻<br>${t('navReader')}</button>
+      </div>`
+    return sec
+  }
+
+  // ===== 听书页 =====
+  let reader = null
+  function readerView() {
+    reader = reader || createReader()
+    const sec = document.createElement('section')
+    sec.innerHTML = `
+      <h1>${t('readerTitle')}</h1>
+      <p class="home-sub">${t('readerSub')}</p>
+      <div class="reader-controls">
+        <label>${t('readerSpeed')}：<input type="range" id="reader-speed" min="0.5" max="5" step="0.5" value="1" aria-label="${t('readerSpeed')}"></label>
+        <span id="reader-speed-val">1x</span>
+        <button id="reader-play">${t('readerPlay')}</button>
+        <button id="reader-stop">${t('readerStop')}</button>
+      </div>
+      <div id="reader-progress" aria-live="polite"></div>
+      <div class="reader-question">
+        <span>${t('readerUnderstand')}</span>
+        <button id="reader-yes">${t('readerYes')}</button>
+        <button id="reader-no">${t('readerNo')}</button>
+      </div>`
+    return sec
+  }
+
+  function bindReader(container) {
+    if (!reader) return
+    const speedEl = container.querySelector('#reader-speed')
+    const speedVal = container.querySelector('#reader-speed-val')
+    const playBtn = container.querySelector('#reader-play')
+    const stopBtn = container.querySelector('#reader-stop')
+    const progressEl = container.querySelector('#reader-progress')
+    speedEl?.addEventListener('input', () => {
+      const v = clampSpeed(Number(speedEl.value))
+      reader.setSpeed(v)
+      speedVal.textContent = `${v}x`
+    })
+    playBtn?.addEventListener('click', async () => {
+      playBtn.disabled = true
+      progressEl.textContent = t('readerPlaying')
+      await reader.play(SAMPLE_TEXT)
+      playBtn.disabled = false
+      progressEl.textContent = ''
+    })
+    stopBtn?.addEventListener('click', () => { reader.stop() })
+    container.querySelector('#reader-yes')?.addEventListener('click', () => speak(t('readerYes') + '，' + t('readerThank')))
+    container.querySelector('#reader-no')?.addEventListener('click', () => speak(t('readerNo') + '，' + t('readerThank')))
+  }
+
   // ===== 渲染 =====
   function render() {
     document.querySelectorAll('nav button').forEach(b => {
@@ -74,23 +141,41 @@ export function initApp() {
     dotsEl.innerHTML = [...Array(6)].map((_, i) =>
       `<span class="dot ${state.brailleDots[i] ? 'on' : ''}" style="grid-area:d${i + 1}"></span>`
     ).join('')
-    main.replaceChildren(dotsEl, pageViews[state.currentPage] ?? emptyView())
-    // 输入反馈条（按点位键实时显示 组合→字母）
+    // 懒重建视图（语言切换后清缓存，这里按当前语言重建）
+    if (!pageViews.teaching) {
+      pageViews.teaching = teaching.view()
+      teaching.bind(pageViews.teaching)
+    }
+    if (!pageViews.experiment) {
+      pageViews.experiment = experiment.view()
+      experiment.bind(pageViews.experiment)
+    }
+    if (!pageViews.notes) {
+      pageViews.notes = notes.view()
+    }
+    if (!pageViews.reader) {
+      pageViews.reader = readerView()
+      bindReader(pageViews.reader)
+    }
+    const view = state.currentPage === 'home' ? homeView() : (pageViews[state.currentPage] ?? emptyView())
+    main.replaceChildren(dotsEl, view)
+    // 输入反馈条
     main.appendChild(input.feedbackEl)
+    // 动态绑定
+    if (state.currentPage === 'reader') bindReader(main)
     // 语言切换后重建视图文案
     if (state.currentPage === 'notes') notes.updateReference?.()
   }
 
   // ===== 输入器接线 =====
   const input = initInput({ state, render, settings: state.settings })
-  const activeField = () => pageViews[state.currentPage]?.querySelector('textarea') ?? main
+  const activeField = () => main.querySelector('textarea')
   input.setInsertHandler(text => {
     const ta = activeField()
     if (ta && 'selectionStart' in ta) {
       const s = ta.selectionStart ?? ta.value.length
       ta.value = ta.value.slice(0, s) + text + ta.value.slice(ta.selectionEnd ?? s)
       ta.focus()
-      // 明文对照更新（notes API 对象，不是 DOM 视图）
       notes.updateReference?.()
     }
   })
@@ -103,26 +188,22 @@ export function initApp() {
     }
   })
 
-  // ===== 教学/笔记/实验接线 =====
+  // ===== 教学/笔记/实验/听书接线 =====
   const teaching = initTeaching({ state, render, storage })
   const notes = initNotes({ state, storage, render })
   const experiment = initExperiment({ state, render })
-  pageViews.teaching = teaching.view()
+  // 视图由 render 懒重建（语言切换后自动按当前语言重建）
   pageViews.input = emptyView()
-  pageViews.experiment = experiment.view()
-  pageViews.notes = notes.view()
-  teaching.bind(pageViews.teaching)
-  experiment.bind(pageViews.experiment)
   input.setTeachingSubmit((dots) => teaching.handleConfirm(dots))
-  // 实验：按 0 统一入口（听音频/提交猜测，见 experiment.handleKey0）
   input.setExperimentSubmit((dots) => experiment.handleKey0(dots))
 
-  // 页面级按钮：教学阶段切换、笔记保存/回放、实验开始
+  // 页面级按钮：教学阶段/子模块、笔记保存/回放、实验开始
   document.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-mode]')
-    if (btn) {
-      const mode = btn.dataset.mode
-      void teaching.init(mode)   // teaching.js 内部会出题并播报
+    const navBtn = e.target.closest('[data-nav]')
+    if (navBtn) {
+      state.currentPage = navBtn.dataset.nav
+      input.resetInput()
+      render()
       return
     }
     if (e.target.closest('#note-save')) { void notes.save(); return }
@@ -162,9 +243,9 @@ export function initApp() {
       speak(t('press0Start'))
     }
   }
-  window.addEventListener('keydown', gateKey, true)   // capture 阶段拦截一切
+  window.addEventListener('keydown', gateKey, true)
 
-  // 解锁前点击导航/按钮也拦截（遮罩已挡住，但保险起见）
+  // 解锁前点击导航/按钮也拦截
   document.addEventListener('click', (e) => {
     if (audioUnlocked) return
     if (e.target.closest('#start-gate')) {
@@ -184,12 +265,11 @@ export function initApp() {
     const next = getLang() === 'en' ? 'zh' : 'en'
     setLang(next)
     speak(t('langChanged') + ' ' + (next === 'en' ? 'English' : '中文'))
-    // 重建当前页视图（更新文案）
-    pageViews.teaching = teaching.view()
-    pageViews.experiment = experiment.view()
-    pageViews.notes = notes.view()
-    teaching.bind(pageViews.teaching)
-    experiment.bind(pageViews.experiment)
+    // 重建视图（更新文案）——清缓存，render 时按当前语言重建
+    delete pageViews.teaching
+    delete pageViews.experiment
+    delete pageViews.notes
+    delete pageViews.reader
     render()
   }
 
@@ -204,7 +284,6 @@ export function initApp() {
       saveSettings(state.settings)
       speak(state.settings.silentMode ? t('silentOn') : t('silentOff'))
     }
-    // 语言切换：Ctrl+Shift+L
     if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'l') {
       e.preventDefault()
       toggleLang()
@@ -223,7 +302,7 @@ export function initApp() {
     }
   })
 
-  // 历史笔记列表（Ctrl+O：上下键选择，Enter 打开）
+  // 历史笔记列表
   async function openHistory() {
     const list = await notes.list()
     if (list.length === 0) { speak(t('notesNoHistory')); return }
@@ -256,7 +335,5 @@ export function initApp() {
     options[0]?.addEventListener('click', () => { close(); void notes.open(options[0].dataset.id) })
   }
 
-  main.focus()
-  speak(t('welcome'))
   render()
 }

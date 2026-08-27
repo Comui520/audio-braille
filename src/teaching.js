@@ -183,9 +183,22 @@ export function initTeaching({ state, render, storage, kind = 'latin', lang = 'z
     handleConfirm(dots) { if (currentItem) checkAnswer(dots) },
     // 拼音阶段切换（* 下一个 / 上一个），由 input.js 调用
     setPhase(stage) { state.inputStage = stage; render() },
+    // 切换子模块（拼音/字母/符号/数字）
+    setKind(k) {
+      if (!LESSON_TYPES.includes(k)) return
+      kind = k
+      index = 0; examCorrect = 0; examTotal = 0; currentItem = null
+      next()
+    },
     view() {
       const sec = document.createElement('section')
-      sec.innerHTML = `<h1>${t('lessonTitle')}${kind === 'pinyin' ? '（拼音）' : kind === 'latin' ? '（字母）' : kind === 'symbols' ? '（符号）' : '（数字）'}</h1>
+      sec.innerHTML = `<h1>${t('lessonTitle')}</h1>
+        <div class="kind-buttons">
+          <button data-kind="pinyin" class="kind-btn">${t('kindPinyin')}</button>
+          <button data-kind="latin" class="kind-btn active">${t('kindLatin')}</button>
+          <button data-kind="symbols" class="kind-btn">${t('kindSymbols')}</button>
+          <button data-kind="digits" class="kind-btn">${t('kindDigits')}</button>
+        </div>
         <div class="phase-buttons">
           <button data-phase="learn" class="phase-btn active">${t('learnBtn')}</button>
           <button data-phase="practice" class="phase-btn">${t('practiceBtn')}</button>
@@ -201,6 +214,13 @@ export function initTeaching({ state, render, storage, kind = 'latin', lang = 'z
           container.querySelectorAll('.phase-btn').forEach(b => b.classList.remove('active'))
           btn.classList.add('active')
           void this.init(btn.dataset.phase)
+        })
+      })
+      container.querySelectorAll('[data-kind]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          container.querySelectorAll('.kind-btn').forEach(b => b.classList.remove('active'))
+          btn.classList.add('active')
+          this.setKind(btn.dataset.kind)
         })
       })
     }

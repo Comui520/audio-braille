@@ -182,6 +182,63 @@ textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3
   box-shadow: 0 4px 16px rgba(56,189,248,0.3);
 }
 
+/* ===== 教学子模块按钮 ===== */
+.kind-buttons { display: flex; gap: 0.5em; flex-wrap: wrap; margin: 1em 0; }
+.kind-btn { font-weight: 600; }
+.kind-btn.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  border-color: transparent;
+}
+
+/* ===== 首页入口卡片 ===== */
+.home h1 { text-align: center; }
+.home-sub { text-align: center; color: var(--muted); margin-bottom: 2em; }
+.home-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.2em;
+  margin: 1.2em 0;
+}
+.home-card {
+  padding: 2em 1em;
+  font-size: 1.25em;
+  font-weight: 700;
+  border-radius: var(--radius);
+  background: var(--card);
+  border: 2px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+  line-height: 1.7;
+}
+.home-card:hover { border-color: var(--accent); transform: translateY(-3px); box-shadow: var(--shadow); }
+
+/* ===== 听书页 ===== */
+.reader-controls { display: flex; align-items: center; gap: 1em; flex-wrap: wrap; margin: 1.5em 0; }
+.reader-controls label { font-size: 1.05em; }
+.reader-controls input[type="range"] { width: 200px; accent-color: var(--accent); }
+#reader-speed-val { font-weight: 700; color: var(--accent); min-width: 2.5em; }
+#reader-progress { min-height: 1.5em; color: var(--muted); margin: 0.8em 0; }
+.reader-question {
+  margin: 2em 0;
+  padding: 1.2em;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  display: flex;
+  align-items: center;
+  gap: 1em;
+  flex-wrap: wrap;
+  font-size: 1.1em;
+}
+.reader-question button {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  border-color: transparent;
+  font-weight: 700;
+}
+
 /* ===== 出题区 ===== */
 #lesson {
   margin: 1.2em 0;
