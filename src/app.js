@@ -153,11 +153,9 @@ export function initApp() {
     // 懒重建视图（语言切换后清缓存，这里按当前语言重建）
     if (!pageViews.teaching) {
       pageViews.teaching = teaching.view()
-      teaching.bind(pageViews.teaching)
     }
     if (!pageViews.experiment) {
       pageViews.experiment = experiment.view()
-      experiment.bind(pageViews.experiment)
     }
     if (!pageViews.notes) {
       pageViews.notes = notes.view()
@@ -255,14 +253,6 @@ export function initApp() {
       <p class="gate-guide-text"><strong>${t('guideQuickTitle')}</strong>${t('guideQuick')}</p>`
   }
 
-  function unlockApp() {
-    audioUnlocked = true
-    unlockAudio()
-    if (gateEl) gateEl.remove()
-    speak(t('welcome'))
-    main.focus()
-  }
-
   function gateKey(e) {
     if (audioUnlocked) return
     e.preventDefault()
@@ -273,10 +263,8 @@ export function initApp() {
       speak(t('press0Start'))
     }
   }
-  window.addEventListener('keydown', gateKey, true)
-
-  // 解锁前点击导航/按钮也拦截
-  document.addEventListener('click', (e) => {
+  
+  function gateClick(e) {
     if (audioUnlocked) return
     if (e.target.closest('#start-gate')) {
       unlockApp()
@@ -285,7 +273,21 @@ export function initApp() {
     e.preventDefault()
     e.stopPropagation()
     speak(t('press0Start'))
-  }, true)
+  }
+  
+  window.addEventListener('keydown', gateKey, true)
+  document.addEventListener('click', gateClick, true)
+
+  function unlockApp() {
+    audioUnlocked = true
+    unlockAudio()
+    if (gateEl) gateEl.remove()
+    // 移除启动门拦截器
+    window.removeEventListener('keydown', gateKey, true)
+    document.removeEventListener('click', gateClick, true)
+    speak(t('welcome'))
+    main.focus()
+  }
 
   const langBtn = document.getElementById('lang-toggle')
   if (langBtn) {

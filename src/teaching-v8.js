@@ -1,4 +1,4 @@
-// src/teaching-v8.js —— v8：三级教学页面（首页/分类/单项）
+﻿// src/teaching-v8.js —— v8：三级教学页面（首页/分类/单项）
 import { speak } from './speech.js'
 import { t, getLang } from './i18n.js'
 import { playAudioBraille } from './audio-braille.js'
@@ -13,6 +13,7 @@ let currentCategory = null // pinyin | latin | symbols | digits
 let currentSection = null // initials | finals | ...
 let currentItem = null // b | a | ...
 let currentPhase = 'learn' // learn | practice | exam
+let renderFn = null // 渲染函数（由 initTeaching 注入）
 
 // ===== 页面 1：教学首页（四大卡片）=====
 function homeView() {
@@ -40,7 +41,7 @@ function homeView() {
     btn.addEventListener('click', () => {
       currentCategory = btn.dataset.category
       currentView = 'category'
-      render()
+      if (renderFn) renderFn()
     })
   })
   return sec
@@ -93,7 +94,7 @@ function categoryView() {
   sec.querySelector('.back-btn').addEventListener('click', () => {
     currentView = 'home'
     currentCategory = null
-    render()
+    if (renderFn) renderFn()
   })
   
   sec.querySelectorAll('.item-btn, .continue-btn').forEach(btn => {
@@ -103,7 +104,7 @@ function categoryView() {
       currentPhase = 'learn'
       currentView = 'item'
       setCurrentItem(currentCategory, currentSection, currentItem)
-      render()
+      if (renderFn) renderFn()
     })
   })
   
@@ -188,7 +189,7 @@ function itemView(state) {
     currentView = 'category'
     currentSection = null
     currentItem = null
-    render()
+    if (renderFn) renderFn()
   })
   
   sec.querySelector('.play-btn').addEventListener('click', () => {
@@ -198,7 +199,7 @@ function itemView(state) {
   sec.querySelectorAll('.phase-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       currentPhase = btn.dataset.phase
-      render()
+      if (renderFn) renderFn()
     })
   })
   
@@ -209,7 +210,7 @@ function itemView(state) {
     if (currentIndex < items.length - 1) {
       currentItem = items[currentIndex + 1]
       setCurrentItem(currentCategory, currentSection, currentItem)
-      render()
+      if (renderFn) renderFn()
     } else {
       speak('本小节全部学完')
     }
@@ -220,7 +221,7 @@ function itemView(state) {
     prevBtn.addEventListener('click', () => {
       currentItem = items[currentIndex - 1]
       setCurrentItem(currentCategory, currentSection, currentItem)
-      render()
+      if (renderFn) renderFn()
     })
   }
   
@@ -229,7 +230,7 @@ function itemView(state) {
     nextBtn.addEventListener('click', () => {
       currentItem = items[currentIndex + 1]
       setCurrentItem(currentCategory, currentSection, currentItem)
-      render()
+      if (renderFn) renderFn()
     })
   }
   
@@ -312,6 +313,9 @@ export function initTeaching({ state, render: rerenderApp }) {
     container.appendChild(view)
   }
   
+  // 注入渲染函数到模块作用域
+  renderFn = render
+  
   // 输入判定回调
   function onSubmit(dots) {
     if (currentView !== 'item') return
@@ -345,7 +349,7 @@ export function initTeaching({ state, render: rerenderApp }) {
         if (currentIndex < items.length - 1) {
           currentItem = items[currentIndex + 1]
           setCurrentItem(currentCategory, currentSection, currentItem)
-          render()
+          if (renderFn) renderFn()
         }
       }
     } else {
