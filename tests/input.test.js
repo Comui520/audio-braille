@@ -1,6 +1,6 @@
 // tests/input.test.js
 import { describe, it, expect } from 'vitest'
-import { KEY_DOT_MAP, keyToDot, nextStageAfterConfirm } from '../src/input.js'
+import { KEY_DOT_MAP, keyToDot, nextStageAfterConfirm, buildSyllable } from '../src/input.js'
 
 describe('键位映射（官方布局，可自定义）', () => {
   it('7→点1 … 2→点6', () => {
@@ -24,5 +24,21 @@ describe('输入阶段状态机', () => {
     expect(nextStageAfterConfirm('initial', true)).toBe('final')
     expect(nextStageAfterConfirm('final', true)).toBe('tone')
     expect(nextStageAfterConfirm('tone', true)).toBe('commit')
+  })
+})
+
+describe('buildSyllable（布尔→数字缓冲区）', () => {
+  it('用数字点位缓冲区组装音节并应用变读', () => {
+    const syl = buildSyllable({ initial: [1, 3, 4], final: [3, 5], tone: [1] }, true)
+    expect(syl).toEqual({ initial: 'm', final: 'a', tone: '1', dots: [[1, 3, 4], [3, 5], [1]] })
+  })
+  it('g+i 变读为 ji', () => {
+    const syl = buildSyllable({ initial: [1, 2, 4, 5], final: [2, 4], tone: null }, false)
+    expect(syl.initial).toBe('j')
+    expect(syl.final).toBe('i')
+  })
+  it('缺少声母或韵母返回 null', () => {
+    expect(buildSyllable({ initial: null, final: [3, 5], tone: null }, false)).toBe(null)
+    expect(buildSyllable({ initial: [1, 3, 4], final: null, tone: null }, false)).toBe(null)
   })
 })

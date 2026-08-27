@@ -49,22 +49,21 @@ export function initInput({ state, render, settings }) {
     switch (e.key) {
       case '0': {   // 确认：当前方 → 下一阶段 或 上屏
         e.preventDefault()
-        const comp = dotsToComponent(state.brailleDots)
+        // state.brailleDots 是布尔数组，需转为数字点位数组再解析
+        const dots = state.brailleDots.map((v, i) => (v ? i + 1 : 0)).filter(Boolean)
+        const comp = dotsToComponent(dots)
         if (state.inputStage === 'initial' && comp?.type === 'initial') {
-          buffers.initial = state.brailleDots
+          buffers.initial = dots
           state.inputStage = nextStageAfterConfirm('initial', withTone())
           state.clearDots()
         } else if (state.inputStage === 'final' && comp?.type === 'final') {
-          buffers.final = state.brailleDots
+          buffers.final = dots
           state.inputStage = nextStageAfterConfirm('final', withTone())
           state.clearDots()
-        } else if (state.inputStage === 'tone' && (comp?.type === 'tone' || state.inputStage === 'tone')) {
-          buffers.tone = state.brailleDots
+          if (state.inputStage === 'commit') void commit()   // 无调：两方即上屏
+        } else if (state.inputStage === 'tone' && comp?.type === 'tone') {
+          buffers.tone = dots
           state.inputStage = 'commit'
-          void commit()
-        } else if (state.inputStage === 'final' && !withTone()) {
-          void commit()
-        } else if ( state.inputStage === 'commit') {
           void commit()
         } else {
           speak('请输入有效的盲文点位')
@@ -124,7 +123,10 @@ export function initInput({ state, render, settings }) {
   let onBackspace = () => {}
   return {
     setInsertHandler(fn) { onInsert = fn },
-    setBackspaceHandler(fn) { onBackspace = fn }
+    setBackspaceHandler(fn) { onBackspace = fn },
+    clearBuffers() { buffers.initial = buffers.final = buffers.tone = null },
+    // 供 app.js 在输入模式/页面切换时清空阶段
+    resetInput() { this.clearBuffers(); state.clearDots() }
   }
 }
 
