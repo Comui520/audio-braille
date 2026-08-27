@@ -47,10 +47,20 @@ export function initInput({ state, render, settings }) {
     }
 
     switch (e.key) {
-      case '0': {   // 确认：当前方 → 下一阶段 或 上屏
+      case '0': {   // 确认：当前方 → 下一阶段 或 上屏；教学/实验模式下交给对应模块
         e.preventDefault()
-        // state.brailleDots 是布尔数组，需转为数字点位数组再解析
         const dots = state.brailleDots.map((v, i) => (v ? i + 1 : 0)).filter(Boolean)
+        // 教学/实验模式：按 0 提交/确认（不经过输入阶段状态机）
+        if (state.currentPage === 'teaching' && onTeachingConfirm) {
+          onTeachingConfirm(dots)
+          render()
+          return
+        }
+        if (state.currentPage === 'experiment' && onExperimentConfirm) {
+          onExperimentConfirm(dots)
+          render()
+          return
+        }
         const comp = dotsToComponent(dots)
         if (state.inputStage === 'initial' && comp?.type === 'initial') {
           buffers.initial = dots
@@ -123,9 +133,14 @@ export function initInput({ state, render, settings }) {
   // 注入的 UI 回调（app.js 提供）
   let onInsert = () => {}
   let onBackspace = () => {}
+  let onTeachingConfirm = null
+  let onExperimentConfirm = null
   return {
     setInsertHandler(fn) { onInsert = fn },
     setBackspaceHandler(fn) { onBackspace = fn },
+    // 教学/实验模式的按 0 分发（app.js 注入）
+    setTeachingConfirm(fn) { onTeachingConfirm = fn },
+    setExperimentConfirm(fn) { onExperimentConfirm = fn },
     clearBuffers() { buffers.initial = buffers.final = buffers.tone = null },
     // 供 app.js 在输入模式/页面切换时清空阶段
     resetInput() { this.clearBuffers(); state.brailleDots = [false, false, false, false, false, false]; state.inputStage = 'initial' }

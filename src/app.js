@@ -88,22 +88,25 @@ export function initApp() {
   pageViews.input = emptyView()
   pageViews.experiment = experiment.view()
   pageViews.notes = notes.view()
+  teaching.bind(pageViews.teaching)
+  experiment.bind(pageViews.experiment)
+  input.setTeachingConfirm((dots) => teaching.handleConfirm(dots))
+  input.setExperimentConfirm((dots) => experiment.handleConfirm(dots))
 
   // 页面级按钮：教学模式切换、笔记保存/回放、实验开始
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-mode]')
     if (btn) {
       const mode = btn.dataset.mode
-      state.teachingMode = mode
-      const lesson = document.querySelector('#lesson')
-      if (lesson) lesson.textContent = `已进入${mode === 'explore' ? '探索' : '考试'}模式（TTS 出题，小键盘作答）`
-      speak(mode === 'explore' ? '探索模式' : '考试模式')
+      void teaching.init(mode)   // teaching.js 内部会出题并播报
       return
     }
     if (e.target.closest('#note-save')) { void notes.save(); return }
     if (e.target.closest('#note-play')) { void notes.playback(); return }
     if (e.target.closest('[data-exp="start"]')) { experiment.start(); return }
   })
+  teaching.bind(pageViews.teaching)
+  experiment.bind(pageViews.experiment)
 
   // 导航切换（键盘 Tab + Enter 原生支持 button）
   document.querySelectorAll('nav button').forEach(btn => {
