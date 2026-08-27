@@ -284,6 +284,7 @@ export function initApp() {
     }
     e.preventDefault()
     e.stopPropagation()
+    speak(t('press0Start'))
   }, true)
 
   const langBtn = document.getElementById('lang-toggle')
