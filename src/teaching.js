@@ -20,10 +20,17 @@ import { toCells, gradeCells, keyHintForCells, cellsToUnicode, speakableDigits, 
 // 盲文方点阵图 HTML（v7：教学展示字符的盲文长啥样）
 function diagramHtml(cells) {
   const cellsHtml = cellsToDiagram(cells).map(c => {
-    const dots = c.dots.map((on, i) =>
-      `<span class="bd-dot${on ? ' on' : ''}" style="grid-area:d${i + 1}"></span>`
-    ).join('')
-    return `<span class="bd-cell" aria-hidden="true">${dots}</span>`
+    // 点的顺序：1(左上) 4(右上) 2(左中) 5(右中) 3(左下) 6(右下)
+    // grid-area 在 CSS 中定义：nth-child(1)=d1, nth-child(2)=d4, nth-child(3)=d2...
+    const dotsHtml = [
+      c.dots[0], // 点1 → nth-child(1) → d1
+      c.dots[3], // 点4 → nth-child(2) → d4
+      c.dots[1], // 点2 → nth-child(3) → d2
+      c.dots[4], // 点5 → nth-child(4) → d5
+      c.dots[2], // 点3 → nth-child(5) → d3
+      c.dots[5]  // 点6 → nth-child(6) → d6
+    ].map((on, i) => `<span class="bd-dot${on ? ' on' : ''}"></span>`).join('')
+    return `<span class="bd-cell" aria-hidden="true">${dotsHtml}</span>`
   }).join('')
   return `<span class="braille-diagram">${cellsHtml}<span class="bd-unicode">${cellsToUnicode(cells)}</span></span>`
 }

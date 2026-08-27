@@ -265,11 +265,11 @@ export function initApp() {
 
   function gateKey(e) {
     if (audioUnlocked) return
+    e.preventDefault()
+    e.stopPropagation()
     if (e.key === '0') {
       unlockApp()
     } else {
-      e.preventDefault()
-      e.stopPropagation()
       speak(t('press0Start'))
     }
   }
