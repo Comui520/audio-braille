@@ -1,13 +1,19 @@
-// src/input.js
-import { dotsToComponent, syllableToDots, dotsToUnicode, applyVariation } from './braille-engine.js'
+// src/input.js —— v2：英文优先（单方拉丁字母直出），中文拼音模式保留为 switchable
+import { dotsToUnicode, dotsToComponent, applyVariation, syllableToDots, latinToDots, dotsToLatin } from './braille-engine.js'
 import { playAudioBraille } from './audio-braille.js'
 import { speak } from './speech.js'
+import { t, getLang } from './i18n.js'
 
 // 官方布局（可自定义：存储于 localStorage，见 app.js 设置加载）
 export const KEY_DOT_MAP = { '7': 0, '4': 1, '1': 2, '8': 3, '5': 4, '2': 5 }
 export const keyToDot = (key) => (key in KEY_DOT_MAP ? KEY_DOT_MAP[key] : null)
 
-// 输入阶段：initial(声母) → final(韵母) → tone(声调，可选) → commit
+// 输入模式：latin（英文：单方直出） | pinyin（中文：声母+韵母+声调 三方状态机）
+export function resolveInputMode(settings) {
+  return getLang() === 'en' ? 'latin' : (settings?.pinyinMode === false ? 'latin' : 'pinyin')
+}
+
+// 拼音状态机（中文模式保留；见 v1 文档）
 export function nextStageAfterConfirm(stage, withTone) {
   if (stage === 'initial') return 'final'
   if (stage === 'final') return withTone ? 'tone' : 'commit'
@@ -15,9 +21,8 @@ export function nextStageAfterConfirm(stage, withTone) {
   return 'commit'
 }
 
-// 组装当前音节的盲文方序列并解析为拼音（供上屏/播报）
+// 组装当前音节的盲文方序列并解析为拼音（中文模式用）
 export function buildSyllable(buffers, withTone) {
-  // buffers: { initial: dotsArray|null, final: dotsArray|null, tone: dotsArray|null }
   const init = buffers.initial ? dotsToComponent(buffers.initial) : null
   const fin = buffers.final ? dotsToComponent(buffers.final) : null
   if (!init || init.type !== 'initial') return null
@@ -27,12 +32,17 @@ export function buildSyllable(buffers, withTone) {
   return { initial, final, tone: tone?.type === 'tone' ? tone.value : null, dots: syllableToDots(init.value, fin.value, tone?.value) }
 }
 
+// 把盲文点位（6 位布尔数组 → 数字数组）转成当前语言的字符
+function dotsToChar(dots) {
+  return getLang() === 'en' ? dotsToLatin(dots) : null
+}
+
 // DOM 接入：绑定全局 keydown（由 app.js 调用）
 // 依赖：AppState（state）、storage 设置、UI 回调
-// 重要：所有小键盘键 preventDefault()，避免 textarea 中误输数字
 export function initInput({ state, render, settings }) {
   const buffers = { initial: null, final: null, tone: null }
   const withTone = () => settings.toneMode !== false   // 设置：进阶模式默认开启声调
+  const inputMode = () => resolveInputMode(settings)
 
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.altKey || e.metaKey) return   // 让位组合键（Ctrl+S 等）
@@ -61,6 +71,21 @@ export function initInput({ state, render, settings }) {
           render()
           return
         }
+        // 英文模式：单方直出
+        if (inputMode() === 'latin') {
+          const latin = dotsToLatin(dots)
+          if (latin) {
+            onInsert(dotsToUnicode(dots))
+            speak(latin)
+            playAudioBraille(dots)
+            state.clearDots()
+          } else {
+            speak(t('invalidDots'))
+          }
+          render()
+          break
+        }
+        // 中文拼音模式（保留 v1 状态机）
         const comp = dotsToComponent(dots)
         if (state.inputStage === 'initial' && comp?.type === 'initial') {
           buffers.initial = dots
@@ -76,13 +101,14 @@ export function initInput({ state, render, settings }) {
           state.inputStage = 'commit'
           void commit()
         } else {
-          speak('请输入有效的盲文点位')
+          speak(t('invalidDots'))
         }
         render()
         break
       }
       case '3': {   // 退格：回退上一阶段或删除
         e.preventDefault()
+        if (inputMode() === 'latin') { onBackspace?.(); break }
         if (buffers.tone) { buffers.tone = null; state.inputStage = 'tone' }
         else if (buffers.final) { buffers.final = null; state.inputStage = 'final' }
         else if (buffers.initial) { buffers.initial = null; state.inputStage = 'initial' }
@@ -95,14 +121,14 @@ export function initInput({ state, render, settings }) {
         buffers.initial = buffers.final = buffers.tone = null
         state.brailleDots = [false, false, false, false, false, false]
         state.inputStage = 'initial'
-        speak('已清空')
+        speak(t('clearDone'))
         render()
         break
       }
       case '+': {   // 朗读当前点位 + 和弦预览
         e.preventDefault()
         const dots = state.brailleDots.map((v, i) => (v ? i + 1 : 0)).filter(Boolean)
-        speak(dots.length ? `点${dots.join('、点')}` : '当前无点位')
+        speak(dots.length ? `点${dots.join('、点')}` : t('noDots'))
         playAudioBraille(dots)
         break
       }
@@ -116,7 +142,7 @@ export function initInput({ state, render, settings }) {
 
   async function commit() {
     const syl = buildSyllable(buffers, withTone())
-    if (!syl) { speak('无法解析的音节'); return }
+    if (!syl) { speak(t('unparsable')); return }
     const unicode = syl.dots.map(dotsToUnicode).join('')
     onInsert(unicode)
     speak(`${syl.initial}${syl.final}${syl.tone ?? ''}`)

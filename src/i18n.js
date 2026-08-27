@@ -10,8 +10,14 @@ const storageLike = {
   removeItem: (k) => memStore.delete(k)
 }
 
+// 优先真实 localStorage（含测试注入的 globalThis.localStorage）；否则用内存代理
 function store() {
-  return (typeof window !== 'undefined' && window.localStorage) || storageLike
+  if (typeof globalThis !== 'undefined' && globalThis.localStorage) return globalThis.localStorage
+  return storageLike
+}
+
+export function setLangForTest(lang) {
+  store().setItem(LANG_KEY, lang)
 }
 
 // 中英文案字典（键必须一一对应，测试断言）
