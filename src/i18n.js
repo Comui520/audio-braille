@@ -58,7 +58,7 @@ const MESSAGES = {
     // 实验
     expTitle: 'AudioBraille 听觉实验',
     expStart: '开始实验',
-    expIntro: '实验将比较两种听字母的方式：语音朗读与 AudioBraille 空间音频。共 20 题。请按 0 确认开始。',
+    expIntro: '实验开始。共 10 题。请听音频，用数字键猜盲文点位（如 7 1 8 5）。',
     expConfirm: '请按 0 确认开始',
     expAStart: 'A 组开始。请听语音朗读的字母，用盲文点位打出。',
     expBStart: 'B 组开始。请听 AudioBraille 空间音频识别字母，用盲文点位作答。',
@@ -123,7 +123,7 @@ const MESSAGES = {
     examOver: (v) => `Exam finished, ${v.accuracy} correct, ${Math.round(v.accuracy * 10)}% accuracy`,
     expTitle: 'AudioBraille Audio Experiment',
     expStart: 'Start Experiment',
-    expIntro: 'This experiment compares two ways of hearing letters: voice reading and AudioBraille spatial audio. 20 questions total. Press 0 to confirm start.',
+    expIntro: 'Experiment starts. 10 trials. Listen to the audio and guess the braille dots with number keys (e.g. 7 1 8 5).',
     expConfirm: 'Press 0 to confirm start',
     expAStart: 'Group A starts. Listen to the spoken letter, type it in braille dots.',
     expBStart: 'Group B starts. Listen to AudioBraille spatial audio to identify the letter, answer with braille dots.',

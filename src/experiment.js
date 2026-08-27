@@ -82,6 +82,8 @@ export function initExperiment({ state, render }) {
       return
     }
     current = { dots: trials[idx], startTime: performance.now() }
+    // 用 1-6 数字串描述答案（盲文点号），避免播报数字符号
+    const answerLabel = current.dots.join('')
     setStatus(`第 ${idx + 1}/${trials.length} 题：请听音频，用数字键猜点位（如 7 1 8 5）`)
     // 播放音频（可重听：按 + 再播）
     setTimeout(playCurrent, 300)
@@ -101,11 +103,17 @@ export function initExperiment({ state, render }) {
     },
     start() {
       trials = pickTrialDots(10)
-      stage = 'trials'
-      idx = 0
-      const msg = t('expIntro')
+      stage = 'confirm'
+      const msg = t('expConfirm')
       setStatus(msg)
       speak(msg)
+    },
+    // 按 0 确认开始（app.js 注入）
+    handleConfirm() {
+      if (stage !== 'confirm') return
+      stage = 'trials'
+      idx = 0
+      speak(t('expIntro'))
       nextTrial()
     },
     // 提交猜测（app.js/input.js 在数字键时调用）

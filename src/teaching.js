@@ -70,6 +70,7 @@ export function initTeaching({ state, render, storage }) {
   const ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
   let phase = 'learn'
   let currentItem = null
+  let learnIndex = 0
   let examIndex = 0
   let examCorrect = 0
   let examTotal = 0
@@ -86,7 +87,7 @@ export function initTeaching({ state, render, storage }) {
       examIndex = 0; examCorrect = 0; examTotal = 0
       return
     }
-    currentItem = pickItem({ phase, alphabet: ALPHABET, index: examIndex, reviewQueue: phase === 'exam' ? reviewer.reviewQueue() : [] })
+    currentItem = pickItem({ phase, alphabet: ALPHABET, index: phase === 'learn' ? learnIndex : examIndex, reviewQueue: phase === 'exam' ? reviewer.reviewQueue() : [] })
     const L = currentItem.label
     if (phase === 'learn') {
       // 教：说明键位 → 字母
@@ -101,6 +102,7 @@ export function initTeaching({ state, render, storage }) {
       setLesson(`${t('q', { label: L })}（${t('press0Submit')}）`)
     }
     state.clearDots()
+    if (phase === 'learn') learnIndex++   // 学阶段：按 0 自动进下一字母
   }
 
   function checkAnswer(dots) {
@@ -127,6 +129,7 @@ export function initTeaching({ state, render, storage }) {
     currentItem: () => currentItem,
     async init(m) {
       phase = m
+      learnIndex = 0
       examIndex = 0; examCorrect = 0; examTotal = 0
       currentItem = null
       next()

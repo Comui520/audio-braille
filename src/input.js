@@ -82,9 +82,13 @@ export function initInput({ state, render, settings }) {
           render()
           return
         }
-        // 实验模式：提交猜测
+        // 实验模式：提交猜测（confirm 阶段按 0 确认开始）
         if (state.currentPage === 'experiment' && onExperimentSubmit) {
-          onExperimentSubmit(dots)
+          if (window.__expConfirm && dots.length === 0) {
+            window.__expConfirm()
+          } else {
+            onExperimentSubmit(dots)
+          }
           render()
           return
         }
