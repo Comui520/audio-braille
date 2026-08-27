@@ -128,6 +128,14 @@
 - 纯前端 SPA，构建产物为静态文件，可离线部署（盲校无网环境）
 - **打包边界预留**：业务代码与存储访问全部通过抽象层，将来可无缝套 Tauri（~10MB，获得文件系统能力）
 
+### 3.1.1 部署（Vercel）
+
+- **可部署，零配置**：Vercel 自动识别 Vite 项目（`npm run build` → `dist/`），默认即可；可选 `vercel.json` 显式指定 build/output 更稳。
+- **无后端依赖**：盲文引擎/Web Audio/TTS 全部浏览器本地运行；IndexedDB 存用户浏览器，Vercel 仅托管静态文件。
+- **导出/导入客户端完成**，不受部署影响。
+- 部署方式：`vercel` CLI 或 GitHub 仓库自动部署（git push 即发布），静态站免费计划即可。
+- **注意**：跨设备数据不共享（浏览器沙箱），导出 .brf 可备份；将来需云同步时再加 Serverless Function（YAGNI，暂不做）。
+
 ### 3.2 模块划分
 
 ```
