@@ -73,7 +73,14 @@ describe('对照字表与转写', () => {
   it('getReferences 按声韵调索引返回常用字', () => {
     const refs = getReferences('m', 'a', '1')
     expect(refs).toContain('妈')
+  })
+  it('轻声用空声调键（吗 = ma 轻声）', () => {
+    const refs = getReferences('m', 'a', '')
     expect(refs).toContain('吗')
+  })
+  it('ü 系韵母归一化为 u 键（h+üe → xue2 学）', () => {
+    const refs = getReferences('h', 'üe', '2')
+    expect(refs).toContain('学')
   })
   it('未知音节返回空数组', () => {
     expect(getReferences('x', 'x', '1')).toEqual([])
@@ -82,5 +89,39 @@ describe('对照字表与转写', () => {
     // 妈(ma1) + 好(hao3)
     const seq = [...syllableToDots('m', 'a', '1'), ...syllableToDots('h', 'ao', '3')]
     expect(transliterate(seq)).toBe('妈好')
+  })
+  it('transliterate 支持零声母自成音节（一 yi1）', () => {
+    const seq = syllableToDots('', 'i', '1')
+    expect(seq).toEqual([[2, 4], [1]])
+    expect(transliterate(seq)).toBe('一')
+  })
+})
+
+describe('编码表全量断言（防规格数据回归）', () => {
+  it('全部 18 个声母与规格 2.2 一致', () => {
+    const expected = {
+      b: [1, 2], p: [1, 2, 3, 4], m: [1, 3, 4], f: [1, 2, 4],
+      d: [1, 4, 5], t: [2, 3, 4, 5], n: [1, 3, 4, 5], l: [1, 2, 3],
+      g: [1, 2, 4, 5], k: [1, 3], h: [1, 2, 5],
+      j: [1, 2, 4, 5], q: [1, 3], x: [1, 2, 5],
+      zh: [3, 4], ch: [1, 2, 3, 4, 5], sh: [1, 5, 6], r: [2, 4, 5],
+      z: [1, 3, 5, 6], c: [1, 4], s: [2, 3, 4]
+    }
+    expect(INITIALS).toEqual(expected)
+  })
+  it('全部 34 个韵母与规格 2.3 一致', () => {
+    const expected = {
+      a: [3, 5], o: [2, 6], e: [2, 6], i: [2, 4], u: [1, 3, 6], ü: [3, 4, 6],
+      ai: [2, 4, 6], ei: [2, 3, 4, 6], ui: [2, 4, 5, 6],
+      ao: [2, 3, 5], ou: [1, 2, 3, 5, 6], iu: [1, 2, 5, 6],
+      ie: [1, 5], üe: [2, 3, 4, 5, 6], er: [1, 2, 3, 5],
+      an: [1, 2, 3, 6], en: [3, 5, 6], in: [1, 2, 6], un: [2, 5], ün: [4, 5, 6],
+      ang: [2, 3, 6], eng: [3, 4, 5, 6], ing: [1, 6], ong: [2, 5, 6],
+      ia: [1, 2, 4, 6], ua: [1, 2, 3, 4, 5, 6], uo: [1, 3, 5], uai: [1, 3, 4, 5, 6],
+      ian: [1, 4, 6], uan: [1, 2, 4, 5, 6], üan: [1, 2, 3, 4, 6],
+      iang: [1, 3, 4, 6], uang: [2, 3, 5, 6], iong: [1, 4, 5, 6],
+      iao: [3, 4, 5]
+    }
+    expect(FINALS).toEqual(expected)
   })
 })

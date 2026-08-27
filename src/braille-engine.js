@@ -1,7 +1,7 @@
 // src/braille-engine.js
 // 权威数据源：docs/superpowers/specs/2026-08-27-audiobraille-design.md 第 2 节（GB/T 15720-2008）
 
-// 声母表（g/j、k/h、h/x 共用一方，靠变读规则区分）
+// 声母表（g/j、k/q、h/x 共用一方，靠变读规则区分）
 export const INITIALS = {
   b: [1, 2], p: [1, 2, 3, 4], m: [1, 3, 4], f: [1, 2, 4],
   d: [1, 4, 5], t: [2, 3, 4, 5], n: [1, 3, 4, 5], l: [1, 2, 3],
@@ -71,15 +71,22 @@ export function syllableToDots(initial, final, tone) {
 // ===== 对照字表与转写 =====
 import { HANZI_TABLE } from './data/hanzi-table.js'
 
-// 按 声母+韵母+声调 查对照字（先变读规范化）
+// 零声母书写形式：i/u/ü 自成音节时写 yi/wu/yu
+const ZERO_INITIAL_MAP = { i: 'yi', u: 'wu', ü: 'yu' }
+
+// 按 声母+韵母+声调 查对照字（先变读规范化；ü 归一化为 u；零声母写 yi/wu/yu）
 export function getReferences(initial, final, tone) {
   const { initial: vi } = applyVariation(initial, final)
-  return HANZI_TABLE[`${vi}${final}:${tone || ''}`] ?? []
+  const hasInitial = vi !== ''
+  // 零声母：韵母自成音节时书写形式 yi/wu/yu（如 i→yi），不再拼接声母前缀
+  const pinyinKey = hasInitial ? `${vi}${final}` : (ZERO_INITIAL_MAP[final] ?? final)
+  const key = `${pinyinKey}:${tone || ''}`.replace(/ü/g, 'u')
+  return HANZI_TABLE[key] ?? []
 }
 
 // 盲文方序列 → 汉字明文。
 // 输入：[[1,3,4],[3,5],[1], ...]（每 2~3 方一个音节）。
-// 简策略：按 声母方+韵母方(+声调方) 分组，同音取字表第一个字。
+// 简策略：按 声母方+韵母方(+声调方) 分组；韵母可自成音节（零声母）。同音取字表第一个字。
 export function transliterate(dotsSequence) {
   const out = []
   let i = 0
@@ -92,6 +99,13 @@ export function transliterate(dotsSequence) {
       const refs = getReferences(c1.value, c2.value, tone)
       out.push(refs[0] ?? '')
       i += tone ? 3 : 2
+    } else if (c1?.type === 'final') {
+      // 零声母：韵母自成音节（如 yi1 → [韵母 i][声调 1]）
+      const c2t = dotsToComponent(dotsSequence[i + 1])
+      const tone = c2t?.type === 'tone' ? c2t.value : null
+      const refs = getReferences('', c1.value, tone)
+      out.push(refs[0] ?? '')
+      i += tone ? 2 : 1
     } else {
       out.push('')   // 无法解析的一方（如标点/空格），占位
       i += 1
