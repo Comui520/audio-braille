@@ -73,7 +73,7 @@ export function initApp() {
     ).join('')
     main.replaceChildren(dotsEl, pageViews[state.currentPage] ?? emptyView())
     // 语言切换后重建视图文案
-    if (state.currentPage === 'notes') pageViews.notes?.updateReference?.()
+    if (state.currentPage === 'notes') notes.updateReference?.()
   }
 
   // ===== 输入器接线 =====
@@ -85,8 +85,8 @@ export function initApp() {
       const s = ta.selectionStart ?? ta.value.length
       ta.value = ta.value.slice(0, s) + text + ta.value.slice(ta.selectionEnd ?? s)
       ta.focus()
-      // 明文对照更新
-      pageViews.notes?.updateReference?.()
+      // 明文对照更新（notes API 对象，不是 DOM 视图）
+      notes.updateReference?.()
     }
   })
   input.setBackspaceHandler(() => {
@@ -94,7 +94,7 @@ export function initApp() {
     if (ta && 'selectionStart' in ta && ta.selectionStart > 0) {
       ta.value = ta.value.slice(0, ta.selectionStart - 1) + ta.value.slice(ta.selectionEnd)
       ta.focus()
-      pageViews.notes?.updateReference?.()
+      notes.updateReference?.()
     }
   })
 
