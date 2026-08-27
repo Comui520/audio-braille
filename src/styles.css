@@ -1,4 +1,4 @@
-/* src/styles.css —— 高对比大字号主题骨架 */
+/* src/styles.css —— 高对比大字号主题 + 点阵图 */
 :root {
   --bg: #000; --fg: #ffd700; --accent: #fff;
   --font-size: 20px;
@@ -8,3 +8,30 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); font-size: var(
 [data-theme="light"] { --bg: #fff; --fg: #000; }
 a, button, input, textarea { font-size: 1em; }
 #main-content:focus { outline: 3px solid var(--accent); }
+
+/* 点阵图：3 行 2 列，点1-2-3 左列，点4-5-6 右列 */
+#dots {
+  display: grid;
+  grid-template-columns: repeat(2, 2.2em);
+  grid-template-rows: repeat(3, 2.2em);
+  grid-template-areas:
+    "d1 d4"
+    "d2 d5"
+    "d3 d6";
+  gap: 0.6em;
+  margin: 1.5em 0;
+  padding: 1em;
+  border: 2px solid var(--fg);
+  border-radius: 0.5em;
+  width: max-content;
+}
+.dot {
+  width: 2em; height: 2em; border-radius: 50%;
+  border: 2px solid var(--fg);
+  background: transparent;
+}
+.dot.on { background: var(--fg); }
+.dot.flash { background: var(--accent); box-shadow: 0 0 1em var(--accent); }
+
+/* 设置面板（可切换主题/字号/提示音） */
+#settings-panel label { display: block; margin: 0.6em 0; }
