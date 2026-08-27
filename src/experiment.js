@@ -1,18 +1,15 @@
-// src/experiment.js
+// src/experiment.js —— v2：AudioBraille 听觉实验（独立模块，听音频辨字母）
+// 核心设想：比较"语音朗读字母"与"AudioBraille 空间音频"两种听字母方式，收集可行性数据
 import { playAudioBraille } from './audio-braille.js'
 import { speak } from './speech.js'
+import { t } from './i18n.js'
+import { LATIN_LETTERS, latinToDots, dotsToLatin } from './braille-engine.js'
 
-// 实验：A 组（TTS 朗读字母名）vs B 组（AudioBraille 空间音频，不显示文字）
-// 前置条件：B 组前确认用户已掌握编码（UI 提示）
-// 设计：随机 10 题；耗时口径 = 从播放结束到作答；交叉/随机组序
-
-// 拉丁字母盲文点位表（国际标准，与现行盲文声母同源；实验题目用）
-export const LATIN_LETTERS = {
-  a: [1], b: [1, 2], c: [1, 4], d: [1, 4, 5], e: [1, 5],
-  f: [1, 2, 4], g: [1, 2, 4, 5], h: [1, 2, 5], i: [2, 4], j: [2, 4, 5],
-  k: [1, 3], l: [1, 2, 3], m: [1, 3, 4], n: [1, 3, 4, 5], o: [1, 3, 5],
-  p: [1, 2, 3, 4], q: [1, 2, 3, 4, 5], r: [1, 2, 3, 5], s: [2, 3, 4], t: [2, 3, 4, 5],
-  u: [1, 3, 6], v: [1, 2, 3, 6], w: [2, 4, 5, 6], x: [1, 3, 4, 6], y: [1, 3, 4, 5, 6], z: [1, 3, 5, 6]
+// 随机生成 n 个不重复字母
+export function pickTrialLetters(n = 10) {
+  const keys = Object.keys(LATIN_LETTERS)
+  const shuffled = [...keys].sort(() => Math.random() - 0.5)
+  return shuffled.slice(0, n)
 }
 
 export function createExperiment({ order = 'AB' } = {}) {
@@ -40,9 +37,14 @@ export function summarize(exp) {
   return { tts: calc(groups.tts), ab: calc(groups.ab) }
 }
 
-// 结果播报文案（屏幕 + TTS）
-export function formatResult(s) {
-  return `语音组 ${s.tts.avgTime.toFixed(1)} 秒，AudioBraille 组 ${s.ab.avgTime.toFixed(1)} 秒；正确率语音组 ${Math.round(s.tts.accuracy * 100)}%，AudioBraille 组 ${Math.round(s.ab.accuracy * 100)}%`
+// 结果播报文案（屏幕 + TTS）——兼容传入 experiment 实例或 summarize 结果
+export function formatResult(exp) {
+  const s = typeof exp.trials === 'function' ? summarize(exp) : exp
+  const ttsAcc = Math.round(s.tts.accuracy * 100)
+  const abAcc = Math.round(s.ab.accuracy * 100)
+  const ttsTime = s.tts.avgTime.toFixed(1)
+  const abTime = s.ab.avgTime.toFixed(1)
+  return t('expDone', { accuracy: `${ttsAcc}`, time: `${ttsTime}`, accuracy2: `${abAcc}`, time2: `${abTime}` })
 }
 
 // UI 接线（由 app.js 调用）
@@ -51,14 +53,8 @@ export function initExperiment({ state, render }) {
   // 实验流程状态
   let stage = 'idle'        // idle | confirm | ttsTrials | abTrials | done
   let currentTrial = null   // { group, letter, startTime }
-  let letters = []          // 随机 10 个字母
+  let letters = []
   let idx = 0
-
-  function pickLetters(n = 10) {
-    const keys = Object.keys(LATIN_LETTERS)
-    const shuffled = [...keys].sort(() => Math.random() - 0.5)
-    return shuffled.slice(0, n)
-  }
 
   function setStatus(msg) {
     const el = document.querySelector('#exp-status')
@@ -68,8 +64,8 @@ export function initExperiment({ state, render }) {
   function nextTrial() {
     if (stage === 'ttsTrials' && idx < 10) {
       const letter = letters[idx]
-      currentTrial = { group: 'tts', letter }
-      speak(`请打出字母 ${letter}`)
+      currentTrial = { group: 'tts', letter, startTime: performance.now() }
+      speak(t('expTrialA', { label: String(idx + 1) }) + ` ${letter}`)
       setStatus(`A 组第 ${idx + 1}/10 题：请打出字母 ${letter}`)
       return
     }
@@ -77,23 +73,23 @@ export function initExperiment({ state, render }) {
       // 进入 B 组
       stage = 'abTrials'
       idx = 0
-      letters = pickLetters()
-      speak('B 组开始。请听 AudioBraille 空间音频识别字母，用盲文点位作答。按 0 提交。')
+      letters = pickTrialLetters()
+      speak(t('expBStart'))
       setStatus('B 组开始：听音频识别字母')
       return
     }
     if (stage === 'abTrials' && idx < 10) {
       const letter = letters[idx]
-      currentTrial = { group: 'ab', letter }
-      speak('请听音频')
-      playAudioBraille(LATIN_LETTERS[letter] ?? [])
+      currentTrial = { group: 'ab', letter, startTime: performance.now() }
+      speak(t('expTrialB', { label: String(idx + 1) }))
+      playAudioBraille(latinToDots(letter) ?? [])
       setStatus(`B 组第 ${idx + 1}/10 题：请听音频识别字母`)
       return
     }
     if (stage === 'abTrials' && idx >= 10) {
       // 结束
       stage = 'done'
-      const result = exp.finish()
+      const result = formatResult(exp)
       setStatus(result)
       speak(result)
       return
@@ -104,7 +100,9 @@ export function initExperiment({ state, render }) {
     exp,
     view() {
       const sec = document.createElement('section')
-      sec.innerHTML = '<h1>实验模式</h1><button data-exp="start">开始实验</button><div id="exp-status" aria-live="polite"></div>'
+      sec.innerHTML = `<h1>${t('expTitle')}</h1>
+        <button data-exp="start">${t('expStart')}</button>
+        <div id="exp-status" aria-live="polite"></div>`
       return sec
     },
     bind(container) {
@@ -112,27 +110,27 @@ export function initExperiment({ state, render }) {
     },
     start() {
       stage = 'confirm'
-      letters = pickLetters()
-      speak('实验开始。请确认您已掌握 AudioBraille 编码，再按 0 继续。')
-      setStatus('请按 0 确认开始')
+      letters = pickTrialLetters()
+      speak(t('expIntro'))
+      setStatus(t('expConfirm'))
     },
     // 供 app.js 按 0 时调用
     handleConfirm(dots) {
       if (stage === 'confirm') {
         stage = 'ttsTrials'
         idx = 0
-        speak('A 组开始。请用盲文点位打出听到的字母。')
+        speak(t('expAStart'))
         setStatus('A 组开始')
         nextTrial()
         return
       }
       if (stage === 'ttsTrials' || stage === 'abTrials') {
         // 判定：dots 与当前字母点位比较
-        const expected = LATIN_LETTERS[currentTrial?.letter] ?? []
+        const expected = latinToDots(currentTrial?.letter) ?? []
         const correct = gradeDots(expected, dots)
         const elapsed = ((performance.now() - currentTrial.startTime) / 1000)
         exp.addTrial(currentTrial.group, elapsed, correct)
-        const r = correct ? '正确' : `错误，正确答案是 ${currentTrial.letter}`
+        const r = correct ? t('correct') : t('wrongAnswer', { expected: currentTrial.letter })
         speak(r)
         idx++
         setTimeout(nextTrial, 500)

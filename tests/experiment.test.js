@@ -27,7 +27,8 @@ describe('实验统计', () => {
       e.addTrial('ab', 2.0, true)
       return e
     })())
-    expect(formatResult(s)).toContain('语音组 1.0 秒')
-    expect(formatResult(s)).toContain('AudioBraille 组 2.0 秒')
+    expect(formatResult(s)).toContain('语音组')
+    expect(formatResult(s)).toContain('1.0 秒')
+    expect(formatResult(s)).toContain('2.0 秒')
   })
 })

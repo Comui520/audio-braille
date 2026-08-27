@@ -48,7 +48,7 @@ const MESSAGES = {
     learnAgain: '请再次听音频，按 0 进入下一个',
     practiceIntro: '听名称或音频，打出正确点位。按 0 提交。',
     examIntro: '考核开始。听音频打点位，共 10 题。',
-    examOver: (r) => `考核结束，答对 ${r} 题，正确率 ${Math.round(r * 10)}%`,
+    examOver: (v) => `考核结束，答对 ${v.accuracy} 题，正确率 ${Math.round(v.accuracy * 10)}%`,
     // 实验
     expTitle: 'AudioBraille 听觉实验',
     expStart: '开始实验',
@@ -58,7 +58,7 @@ const MESSAGES = {
     expBStart: 'B 组开始。请听 AudioBraille 空间音频识别字母，用盲文点位作答。',
     expTrialA: (i) => `A 组第 ${i} 题，请打出字母`,
     expTrialB: (i) => `B 组第 ${i} 题，请听音频`,
-    expDone: (ttsAcc, abAcc, ttsTime, abTime) => `实验完成。语音组正确率 ${ttsAcc}%，AudioBraille 组正确率 ${abAcc}%。语音组平均 ${ttsTime} 秒，AudioBraille 组平均 ${abTime} 秒。`,
+    expDone: (v) => `实验完成。语音组正确率 ${v.accuracy}%，AudioBraille 组正确率 ${v.accuracy2}%。语音组平均 ${v.time} 秒，AudioBraille 组平均 ${v.time2} 秒。`,
     // 笔记
     notesTitle: '笔记记录器',
     notesSave: '保存',
@@ -75,15 +75,13 @@ const MESSAGES = {
     settingsTitle: '设置',
     langLabel: '语言',
     // 探索/学习
-    learnItem: (label) => `请学习字母 ${label}`,
-    practiceItem: (label) => `请打出字母 ${label}，按 0 提交`,
-    q: (label) => `请打出字母 ${label}`,
-    wrongAnswer: (expected) => `错误，正确答案是 ${expected}`,
+    learnItem: (v) => `请学习字母 ${v.label}`,
+    practiceItem: (v) => `请打出字母 ${v.label}，按 0 提交`,
+    q: (v) => `请打出字母 ${v.label}`,
+    wrongAnswer: (v) => `错误，正确答案是 ${v.expected}`,
     rightAnswer: '正确',
-    // 结果
     resultTitle: '实验结果',
-    // 复习
-    reviewItem: (label) => `复习：请打出 ${label}`
+    reviewItem: (v) => `复习：请打出 ${v.label}`,
   },
   en: {
     appName: 'AudioBraille Braille Learning Platform',
@@ -116,7 +114,7 @@ const MESSAGES = {
     learnAgain: 'Listen to the audio again, press 0 for next',
     practiceIntro: 'Listen to the name or audio, type the correct dots. Press 0 to submit.',
     examIntro: 'Exam starts. Listen to audio and type dots. 10 questions.',
-    examOver: (r) => `Exam finished, ${r} correct, ${Math.round(r * 10)}% accuracy`,
+    examOver: (v) => `Exam finished, ${v.accuracy} correct, ${Math.round(v.accuracy * 10)}% accuracy`,
     expTitle: 'AudioBraille Audio Experiment',
     expStart: 'Start Experiment',
     expIntro: 'This experiment compares two ways of hearing letters: voice reading and AudioBraille spatial audio. 20 questions total. Press 0 to confirm start.',
@@ -125,7 +123,7 @@ const MESSAGES = {
     expBStart: 'Group B starts. Listen to AudioBraille spatial audio to identify the letter, answer with braille dots.',
     expTrialA: (i) => `Group A trial ${i}, type the letter`,
     expTrialB: (i) => `Group B trial ${i}, listen to the audio`,
-    expDone: (ttsAcc, abAcc, ttsTime, abTime) => `Experiment done. Voice accuracy ${ttsAcc}%, AudioBraille accuracy ${abAcc}%. Voice avg ${ttsTime}s, AudioBraille avg ${abTime}s.`,
+    expDone: (v) => `Experiment done. Voice accuracy ${v.accuracy}%, AudioBraille accuracy ${v.accuracy2}%. Voice avg ${v.time}s, AudioBraille avg ${v.time2}s.`,
     notesTitle: 'Notes',
     notesSave: 'Save',
     notesPlay: 'Playback',
@@ -138,13 +136,13 @@ const MESSAGES = {
     dotsEmpty: 'Empty',
     settingsTitle: 'Settings',
     langLabel: 'Language',
-    learnItem: (label) => `Learn the letter ${label}`,
-    practiceItem: (label) => `Type the letter ${label}, press 0 to submit`,
-    q: (label) => `Type the letter ${label}`,
-    wrongAnswer: (expected) => `Wrong, the answer is ${expected}`,
+    learnItem: (v) => `Learn the letter ${v.label}`,
+    practiceItem: (v) => `Type the letter ${v.label}, press 0 to submit`,
+    q: (v) => `Type the letter ${v.label}`,
+    wrongAnswer: (v) => `Wrong, the answer is ${v.expected}`,
     rightAnswer: 'Correct',
     resultTitle: 'Experiment Result',
-    reviewItem: (label) => `Review: type ${label}`
+    reviewItem: (v) => `Review: type ${v.label}`
   }
 }
 
@@ -158,15 +156,23 @@ export function setLang(lang) {
   return true
 }
 
-// 取当前语言（或指定语言）的文案；支持 {var} 占位符与函数
+// 取当前语言（或指定语言）的文案；函数型支持任意 vars 对象
+// 约定：函数接收完整 vars（{label, accuracy, time, ...}），避免参数位错
+const _noop = (v) => v
+
+function fmt(tpl, vars) {
+  if (typeof tpl === 'function') return tpl(vars)
+  if (tpl == null) return null
+  let out = tpl
+  for (const [k, v] of Object.entries(vars || {})) out = out.replaceAll(`{${k}}`, v)
+  return out
+}
+
 export function t(key, vars = {}, lang) {
   const dict = MESSAGES[lang || getLang()] || MESSAGES.zh
   const msg = dict[key]
-  if (typeof msg === 'function') return msg(vars.label, vars.accuracy, vars.time)
   if (msg == null) return key
-  let out = msg
-  for (const [k, v] of Object.entries(vars)) out = out.replace(`{${k}}`, v)
-  return out
+  return fmt(msg, vars)
 }
 
 export function translateSpeech(lang) {
