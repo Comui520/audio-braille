@@ -77,12 +77,6 @@ export function initApp() {
     main.replaceChildren(dotsEl, pageViews[state.currentPage] ?? emptyView())
     // 输入反馈条（按点位键实时显示 组合→字母）
     main.appendChild(input.feedbackEl)
-    // 启动门未解锁时，覆盖显示「按 0 开始」
-    if (!audioUnlocked) {
-      const gate = Object.assign(document.createElement('div'), { id: 'start-gate' })
-      gate.textContent = t('press0Start')
-      main.appendChild(gate)
-    }
     // 语言切换后重建视图文案
     if (state.currentPage === 'notes') notes.updateReference?.()
   }
@@ -120,9 +114,8 @@ export function initApp() {
   teaching.bind(pageViews.teaching)
   experiment.bind(pageViews.experiment)
   input.setTeachingSubmit((dots) => teaching.handleConfirm(dots))
-  input.setExperimentSubmit((dots) => experiment.submitGuess(dots))
-  // 实验：按 0 确认开始（confirm 阶段）
-  window.__expConfirm = () => experiment.handleConfirm()
+  // 实验：按 0 统一入口（听音频/提交猜测，见 experiment.handleKey0）
+  input.setExperimentSubmit((dots) => experiment.handleKey0(dots))
 
   // 页面级按钮：教学阶段切换、笔记保存/回放、实验开始
   document.addEventListener('click', (e) => {
@@ -135,12 +128,6 @@ export function initApp() {
     if (e.target.closest('#note-save')) { void notes.save(); return }
     if (e.target.closest('#note-play')) { void notes.playback(); return }
     if (e.target.closest('[data-exp="start"]')) { experiment.start(); return }
-    if (e.target.closest('#start-gate')) {
-      // 点击「按 0 开始」面板也解锁
-      const ev = new KeyboardEvent('keydown', { key: '0', bubbles: true, cancelable: true })
-      window.dispatchEvent(ev)
-      return
-    }
   })
 
   // 导航切换（键盘 Tab + Enter 原生支持 button）
@@ -152,31 +139,41 @@ export function initApp() {
     })
   })
 
-  // 启动门：必须先按 0 解锁音频与语音，然后才进入主界面
-  // 所有其他按键（导航/输入）在解锁前被拦截
+  // 启动门：全屏遮罩 + 键拦截，按 0 前无法进入/操作
+  const gateEl = document.getElementById('start-gate')
+  const gateHint = document.getElementById('gate-hint')
+  if (gateHint) gateHint.textContent = t('press0Start')
+
+  function unlockApp() {
+    audioUnlocked = true
+    unlockAudio()
+    if (gateEl) gateEl.remove()
+    speak(t('welcome'))
+    main.focus()
+  }
+
   function gateKey(e) {
     if (audioUnlocked) return
     if (e.key === '0') {
-      audioUnlocked = true
-      unlockAudio()
-      speak(t('welcome'))
-      main.querySelector('#start-gate')?.remove()
-      render()
-      main.focus()
+      unlockApp()
     } else {
       e.preventDefault()
+      e.stopPropagation()
       speak(t('press0Start'))
     }
   }
   window.addEventListener('keydown', gateKey, true)   // capture 阶段拦截一切
 
-  // 首次键盘解锁音频（解锁后首个按键触发）
-  const unlockOnce = () => {
-    window.removeEventListener('keydown', unlockOnce)
-    unlockAudio()
-    speak(t('audioReady'))
-  }
-  window.addEventListener('keydown', unlockOnce)
+  // 解锁前点击导航/按钮也拦截（遮罩已挡住，但保险起见）
+  document.addEventListener('click', (e) => {
+    if (audioUnlocked) return
+    if (e.target.closest('#start-gate')) {
+      unlockApp()
+      return
+    }
+    e.preventDefault()
+    e.stopPropagation()
+  }, true)
 
   const langBtn = document.getElementById('lang-toggle')
   if (langBtn) {

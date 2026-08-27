@@ -26,6 +26,14 @@
   </header>
   <main id="main-content" tabindex="-1" aria-live="polite"></main>
   <div id="status" role="status" aria-live="polite"></div>
+  <!-- 启动门：全屏遮罩，按 0 前挡住一切 -->
+  <div id="start-gate" role="dialog" aria-label="start">
+    <div class="gate-card">
+      <div class="gate-mark" aria-hidden="true">⠁⠃</div>
+      <div class="gate-title">AudioBraille</div>
+      <div class="gate-hint" id="gate-hint">请按 0 开始</div>
+    </div>
+  </div>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

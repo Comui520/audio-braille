@@ -1,6 +1,6 @@
-// tests/experiment.test.js —— v3 重写：纯听觉识别实验
+// tests/experiment.test.js —— v4：分步听觉识别实验
 import { describe, it, expect } from 'vitest'
-import { createAudioTrial, pickTrialDots, gradeDots, createExperiment, summarize } from '../src/experiment.js'
+import { pickTrialLetters, createAudioTrial, pickTrialDots, gradeDots, createExperiment, summarize } from '../src/experiment.js'
 
 describe('实验统计', () => {
   it('汇总正确率与平均耗时', () => {
@@ -20,6 +20,12 @@ describe('实验统计', () => {
 })
 
 describe('题目生成', () => {
+  it('pickTrialLetters 生成 10 个不重复字母', () => {
+    const letters = pickTrialLetters(10)
+    expect(letters).toHaveLength(10)
+    expect(new Set(letters).size).toBe(10)
+    expect(letters.every(l => /^[a-z]$/.test(l))).toBe(true)
+  })
   it('createAudioTrial 生成 3-6 个不重复点位', () => {
     const t = createAudioTrial()
     expect(t.dots.length).toBeGreaterThanOrEqual(3)

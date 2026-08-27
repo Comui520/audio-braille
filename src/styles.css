@@ -264,6 +264,42 @@ textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3
   z-index: 1000;
 }
 .skip-link:focus { left: 0; }
+
+/* ===== 启动门（全屏遮罩） ===== */
+#start-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  background-image: radial-gradient(ellipse at center, var(--bg-soft), var(--bg));
+}
+.gate-card {
+  text-align: center;
+  padding: 3em 4em;
+  border: 2px solid var(--border);
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.gate-mark {
+  font-size: 3em;
+  color: var(--accent);
+  margin-bottom: 0.4em;
+}
+.gate-title {
+  font-size: 1.6em;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.6em;
+}
+.gate-hint {
+  font-size: 1.3em;
+  color: var(--accent);
+  font-weight: 700;
+}
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }

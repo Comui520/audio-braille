@@ -37,9 +37,9 @@ export function buildSyllable(buffers, withTone) {
   return { initial, final, tone: tone?.type === 'tone' ? tone.value : null, dots: syllableToDots(init.value, fin.value, tone?.value) }
 }
 
-// 点位（数字数组）→ 可读字符（英文=拉丁字母）
+// 点位（数字数组）→ 可读字符（始终拉丁字母，不依赖语言——输入体验统一）
 export function dotsToReadable(dots) {
-  return getLang() === 'en' ? dotsToLatin(dots) : null
+  return dotsToLatin(dots)
 }
 
 // DOM 接入：绑定全局 keydown（由 app.js 调用）
@@ -82,46 +82,20 @@ export function initInput({ state, render, settings }) {
           render()
           return
         }
-        // 实验模式：提交猜测（confirm 阶段按 0 确认开始）
+        // 实验模式：统一入口 handleKey0（有点位=提交猜测；无点位=播放音频）
         if (state.currentPage === 'experiment' && onExperimentSubmit) {
-          if (window.__expConfirm && dots.length === 0) {
-            window.__expConfirm()
-          } else {
-            onExperimentSubmit(dots)
-          }
+          onExperimentSubmit(dots)
           render()
           return
         }
-        // 盲文输入器/笔记：盲文直出
-        if (inputMode() === 'latin') {
-          const latin = dotsToLatin(dots)
-          if (latin) {
-            onInsert(dotsToUnicode(dots))
-            speak(latin)   // 仅 0 时播报
-            playAudioBraille(dots)
-            state.clearDots()
-            feedbackEl.textContent = ''
-          } else {
-            speak(t('invalidDots'))
-          }
-          render()
-          break
-        }
-        // 中文拼音模式
-        const comp = dotsToComponent(dots)
-        if (state.inputStage === 'initial' && comp?.type === 'initial') {
-          buffers.initial = dots
-          state.inputStage = nextStageAfterConfirm('initial', withTone())
+        // 盲文输入器/笔记：始终拉丁单方直出（输入体验装置，与语言无关）
+        const latin = dotsToLatin(dots)
+        if (latin) {
+          onInsert(dotsToUnicode(dots))
+          speak(latin)   // 仅 0 时播报
+          playAudioBraille(dots)
           state.clearDots()
-        } else if (state.inputStage === 'final' && comp?.type === 'final') {
-          buffers.final = dots
-          state.inputStage = nextStageAfterConfirm('final', withTone())
-          state.clearDots()
-          if (state.inputStage === 'commit') void commit()
-        } else if (state.inputStage === 'tone' && comp?.type === 'tone') {
-          buffers.tone = dots
-          state.inputStage = 'commit'
-          void commit()
+          feedbackEl.textContent = ''
         } else {
           speak(t('invalidDots'))
         }
@@ -136,11 +110,7 @@ export function initInput({ state, render, settings }) {
           render()
           break
         }
-        if (inputMode() === 'latin') { onBackspace?.(); break }
-        if (buffers.tone) { buffers.tone = null; state.inputStage = 'tone' }
-        else if (buffers.final) { buffers.final = null; state.inputStage = 'final' }
-        else if (buffers.initial) { buffers.initial = null; state.inputStage = 'initial' }
-        else onBackspace?.()
+        onBackspace?.()
         render()
         break
       }
