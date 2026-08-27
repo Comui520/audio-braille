@@ -1,6 +1,6 @@
 // tests/input.test.js
 import { describe, it, expect } from 'vitest'
-import { KEY_DOT_MAP, keyToDot, nextStageAfterConfirm, buildSyllable } from '../src/input.js'
+import { KEY_DOT_MAP, keyToDot, nextStageAfterConfirm, buildSyllable, nextCell, prevCell, cellLabel } from '../src/input.js'
 
 describe('键位映射（官方布局，可自定义）', () => {
   it('7→点1 … 2→点6', () => {
@@ -24,6 +24,26 @@ describe('输入阶段状态机', () => {
     expect(nextStageAfterConfirm('initial', true)).toBe('final')
     expect(nextStageAfterConfirm('final', true)).toBe('tone')
     expect(nextStageAfterConfirm('tone', true)).toBe('commit')
+  })
+})
+
+describe('逐方确认状态机（v5 *下一方 /上一方）', () => {
+  it('nextCell：声母→韵母→声调→提交', () => {
+    expect(nextCell('initial')).toBe('final')
+    expect(nextCell('final')).toBe('tone')
+    expect(nextCell('tone')).toBe('commit')
+    expect(nextCell('commit')).toBe('commit')
+  })
+  it('prevCell：回退', () => {
+    expect(prevCell('final')).toBe('initial')
+    expect(prevCell('tone')).toBe('final')
+    expect(prevCell('initial')).toBe('initial')
+    expect(prevCell('commit')).toBe('tone')
+  })
+  it('cellLabel：阶段名', () => {
+    expect(cellLabel('initial')).toBe('声母')
+    expect(cellLabel('final')).toBe('韵母')
+    expect(cellLabel('tone')).toBe('声调')
   })
 })
 

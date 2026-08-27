@@ -26,6 +26,22 @@ export function nextStageAfterConfirm(stage, withTone) {
   return 'commit'
 }
 
+// 逐方确认状态机（v5：*下一方 //上一方；拼音 声母→韵母→声调）
+export const CELL_ORDER = ['initial', 'final', 'tone', 'commit']
+export function nextCell(stage) {
+  const i = CELL_ORDER.indexOf(stage)
+  if (i === -1 || i >= CELL_ORDER.length - 1) return 'commit'
+  return CELL_ORDER[i + 1]
+}
+export function prevCell(stage) {
+  const i = CELL_ORDER.indexOf(stage)
+  if (i <= 0) return 'initial'
+  return CELL_ORDER[i - 1]
+}
+export function cellLabel(stage) {
+  return { initial: '声母', final: '韵母', tone: '声调', commit: '提交' }[stage] || stage
+}
+
 // 组装当前音节的盲文方序列并解析为拼音（中文模式用）
 export function buildSyllable(buffers, withTone) {
   const init = buffers.initial ? dotsToComponent(buffers.initial) : null
@@ -136,6 +152,22 @@ export function initInput({ state, render, settings }) {
       case '.': {   // 空格
         e.preventDefault()
         onInsert(' ')
+        break
+      }
+      case '*': {   // 下一个：进入下一阶段（拼音：声母→韵母→声调）
+        e.preventDefault()
+        if (state.currentPage !== 'teaching') break
+        state.inputStage = nextStageAfterConfirm(state.inputStage, withTone())
+        speak(cellLabel(state.inputStage))
+        render()
+        break
+      }
+      case '/': {   // 上一个：回退到上一阶段
+        e.preventDefault()
+        if (state.currentPage !== 'teaching') break
+        state.inputStage = prevCell(state.inputStage)
+        speak(cellLabel(state.inputStage))
+        render()
         break
       }
     }
