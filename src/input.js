@@ -8,6 +8,7 @@ import { dotsToUnicode, dotsToComponent, applyVariation, syllableToDots, dotsToL
 import { playAudioBraille } from './audio-braille.js'
 import { speak } from './speech.js'
 import { t, getLang } from './i18n.js'
+import { cellsToUnicode } from './cells.js'
 
 // 官方布局（可自定义：存储于 localStorage，见 app.js 设置加载）
 export const KEY_DOT_MAP = { '7': 0, '4': 1, '1': 2, '8': 3, '5': 4, '2': 5 }
@@ -68,7 +69,8 @@ export function dotsToReadable(dots) {
 
 // DOM 接入：绑定全局 keydown（由 app.js 调用）
 export function initInput({ state, render, settings }) {
-  const buffers = { initial: null, final: null, tone: null, experimentCells: [] }
+  // v7：cells 缓冲统一命名（教学与实验共用逐方输入机制）
+  const buffers = { initial: null, final: null, tone: null, cells: [] }
   const withTone = () => settings.toneMode !== false
   const inputMode = () => resolveInputMode(settings)
 
@@ -88,10 +90,16 @@ export function initInput({ state, render, settings }) {
       e.preventDefault()
       state.setDots(dotIndex)
       if (settings.clickSound) playClick()
-      // 右侧实时显示当前组合 → 字母（合法显示，非法空）
+      // 右侧实时显示当前组合 → 字符（合法显示，非法空）
+      // v7：已确认的方一并显示，让用户看得见光标位置
       const dots = state.brailleDots.map((v, i) => (v ? i + 1 : 0)).filter(Boolean)
       const readable = dotsToReadable(dots)
-      feedbackEl.textContent = readable ? `${dots.join('')} → ${readable}` : ''
+      const donePrefix = buffers.cells.length > 0
+        ? buffers.cells.map(c => cellsToUnicode([c])).join('') + ' + '
+        : ''
+      feedbackEl.textContent = readable
+        ? `${donePrefix}${dots.join('')} → ${readable}`
+        : (donePrefix ? `${donePrefix}…` : '')
       render()
       return
     }
@@ -100,19 +108,24 @@ export function initInput({ state, render, settings }) {
       case '0': {   // 提交/确认
         e.preventDefault()
         const dots = state.brailleDots.map((v, i) => (v ? i + 1 : 0)).filter(Boolean)
-        // 教学模式：提交判定
+        // 教学模式：提交判定（v7：支持多方——已用 * 确认的方 + 当前方一起提交）
         if (state.currentPage === 'teaching' && onTeachingSubmit) {
-          onTeachingSubmit(dots)
+          const allCells = [...buffers.cells]
+          if (dots.length > 0) allCells.push(dots)
+          buffers.cells = []
+          state.clearDots()
+          feedbackEl.textContent = ''
+          onTeachingSubmit(allCells)
           render()
           return
         }
         // 实验模式：统一入口 handleKey0（有点位=提交猜测；无点位=播放音频；有已确认多方则合并提交）
         if (state.currentPage === 'experiment' && onExperimentSubmit) {
           // 若已用 * 确认过一方或多方，把当前方并进去一起提交
-          if (buffers.experimentCells && buffers.experimentCells.length > 0) {
-            const allCells = [...buffers.experimentCells]
+          if (buffers.cells.length > 0) {
+            const allCells = [...buffers.cells]
             if (dots.length > 0) allCells.push(dots)
-            buffers.experimentCells = []
+            buffers.cells = []
             state.clearDots()
             feedbackEl.textContent = ''
             onExperimentSubmit(allCells)
@@ -149,13 +162,18 @@ export function initInput({ state, render, settings }) {
       case '3': {   // 退格
         e.preventDefault()
         if (state.currentPage === 'teaching' || state.currentPage === 'experiment') {
-          // 实验：回退到上一方；教学：清当前点位
-          if (state.currentPage === 'experiment' && buffers.experimentCells && buffers.experimentCells.length > 0) {
-            buffers.experimentCells.pop()
-            feedbackEl.textContent = `回退到 ${buffers.experimentCells.length} 方`
+          // v7：教学/实验统一——当前方有点则清当前方；当前方为空则回退上一已确认方
+          const dots = state.brailleDots.map((v, i) => (v ? i + 1 : 0)).filter(Boolean)
+          if (dots.length > 0) {
+            state.clearDots()
+            feedbackEl.textContent = buffers.cells.length > 0
+              ? `${buffers.cells.map(c => cellsToUnicode([c])).join('')} + …`
+              : ''
+          } else if (buffers.cells.length > 0) {
+            const back = buffers.cells.pop()
+            state.brailleDots = [1, 2, 3, 4, 5, 6].map(d => back.includes(d))
+            feedbackEl.textContent = t('cellBack', { n: String(buffers.cells.length) })
           }
-          state.clearDots()
-          feedbackEl.textContent = ''
           render()
           break
         }
@@ -166,7 +184,7 @@ export function initInput({ state, render, settings }) {
       case '-': {   // 清空
         e.preventDefault()
         buffers.initial = buffers.final = buffers.tone = null
-        buffers.experimentCells = []
+        buffers.cells = []
         state.brailleDots = [false, false, false, false, false, false]
         state.inputStage = 'initial'
         feedbackEl.textContent = ''
@@ -188,44 +206,40 @@ export function initInput({ state, render, settings }) {
         onInsert(' ')
         break
       }
-      case '*': {   // 下一个：确认当前方，进入下一方（实验/拼音教学逐方输入）
+      case '*': {   // 下一方：确认当前方，进入下一方（v7：教学与实验统一）
         e.preventDefault()
-        if (state.currentPage === 'experiment' && onExperimentSubmit) {
-          // 实验：确认当前方（push 到 buffers），进入下一方
+        if (state.currentPage === 'experiment' || state.currentPage === 'teaching') {
           const dots = state.brailleDots.map((v, i) => (v ? i + 1 : 0)).filter(Boolean)
           if (dots.length > 0) {
-            buffers.experimentCells = buffers.experimentCells || []
-            buffers.experimentCells.push(dots)
+            buffers.cells.push(dots)
             state.clearDots()
-            feedbackEl.textContent = `已确认 ${buffers.experimentCells.length} 方，继续输入下一方`
+            feedbackEl.textContent = t('cellConfirmed', {
+              n: String(buffers.cells.length),
+              braille: buffers.cells.map(c => cellsToUnicode([c])).join('')
+            })
+            speak(t('cellNext', { n: String(buffers.cells.length + 1) }))
             render()
           } else {
             speak(t('noDots'))
           }
           return
         }
-        if (state.currentPage !== 'teaching') break
-        state.inputStage = nextStageAfterConfirm(state.inputStage, withTone())
-        speak(cellLabel(state.inputStage))
-        render()
         break
       }
-      case '/': {   // 上一个：回退到上一方（实验）或上一阶段（拼音教学）
+      case '/': {   // 上一方：回退到上一已确认方（v7：教学与实验统一）
         e.preventDefault()
-        if (state.currentPage === 'experiment' && onExperimentSubmit) {
-          // 实验：回退到上一方
-          if (buffers.experimentCells && buffers.experimentCells.length > 0) {
-            buffers.experimentCells.pop()
-            state.clearDots()
-            feedbackEl.textContent = `回退到 ${buffers.experimentCells.length} 方`
+        if (state.currentPage === 'experiment' || state.currentPage === 'teaching') {
+          if (buffers.cells.length > 0) {
+            const back = buffers.cells.pop()
+            state.brailleDots = [1, 2, 3, 4, 5, 6].map(d => back.includes(d))
+            feedbackEl.textContent = t('cellBack', { n: String(buffers.cells.length) })
+            speak(t('cellBack', { n: String(buffers.cells.length) }))
             render()
+          } else {
+            speak(t('noDots'))
           }
           return
         }
-        if (state.currentPage !== 'teaching') break
-        state.inputStage = prevCell(state.inputStage)
-        speak(cellLabel(state.inputStage))
-        render()
         break
       }
     }
@@ -254,7 +268,7 @@ export function initInput({ state, render, settings }) {
     setTeachingSubmit(fn) { onTeachingSubmit = fn },
     setExperimentSubmit(fn) { onExperimentSubmit = fn },
     feedbackEl,
-    clearBuffers() { buffers.initial = buffers.final = buffers.tone = null; buffers.experimentCells = [] },
+    clearBuffers() { buffers.initial = buffers.final = buffers.tone = null; buffers.cells = [] },
     resetInput() { this.clearBuffers(); state.brailleDots = [false, false, false, false, false, false]; state.inputStage = 'initial'; feedbackEl.textContent = '' }
   }
 }

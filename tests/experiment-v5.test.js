@@ -33,31 +33,41 @@ describe('四类辨识题源（v5）', () => {
     expect(symbols).toHaveLength(10)
     expect(new Set(symbols).size).toBe(10)
   })
-  it('buildTrials 生成字母题（含点位）', () => {
+  it('buildTrials 生成字母题（含 cells）', () => {
     const t = buildTrials('letters', 5)
     expect(t).toHaveLength(5)
-    expect(t[0].dots).toBeDefined()
-    expect(t[0].dots.length).toBeGreaterThan(0)
+    expect(t[0].cells).toBeDefined()
+    expect(t[0].cells).toHaveLength(1)         // 字母 = 单方
+    expect(t[0].cells[0].length).toBeGreaterThan(0)
   })
-  it('buildTrials 生成音节题（3方）', () => {
+  it('buildTrials 生成音节题（多方）', () => {
     const t = buildTrials('syllables', 5)
     expect(t).toHaveLength(5)
-    expect(t[0].dots).toBeDefined()
+    expect(t[0].cells).toBeDefined()
+    expect(t[0].cells.length).toBeGreaterThanOrEqual(2)   // 声母方+韵母方(+声调方)
   })
   it('buildTrials 生成符号题', () => {
     const t = buildTrials('symbols', 5)
     expect(t).toHaveLength(5)
-    expect(t[0].dots).toBeDefined()
+    expect(t[0].cells).toBeDefined()
+  })
+  it('v7：所有模式的题目都用 cells（不再有 dots）', () => {
+    for (const mode of ['letters', 'syllables', 'symbols', 'digits']) {
+      const t = buildTrials(mode, 3)
+      expect(t[0].dots).toBeUndefined()
+      expect(t[0].cells.every(c => Array.isArray(c))).toBe(true)
+    }
   })
 })
 
-describe('gradeDots 多方式判定（P0 修复）', () => {
+describe('gradeDots 多方式判定（v7：转发 gradeCells）', () => {
   it('字母题：expected 单层 [1,2,4]，given 单层无序比较', () => {
     expect(gradeDots([1, 2, 4], [4, 1, 2])).toBe(true)
     expect(gradeDots([1, 2, 4], [1, 2, 5])).toBe(false)
   })
-  it('字母题：given 多层时取 first', () => {
-    expect(gradeDots([1, 2, 4], [[4, 1, 2]])).toBe(true)
+  it('字母题：expected 嵌套单方 [[1,5]] + given 单层 → true（旧 bug：永远判错）', () => {
+    expect(gradeDots([[1, 5]], [1, 5])).toBe(true)
+    expect(gradeDots([[1, 2, 4]], [[4, 1, 2]])).toBe(true)
   })
   it('音节题：expected 多层 [[1,3,4],[3,5],[1]]，given 同构多方 → true', () => {
     expect(gradeDots([[1, 3, 4], [3, 5], [1]], [[1, 3, 4], [3, 5], [1]])).toBe(true)

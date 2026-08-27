@@ -107,6 +107,10 @@ const MESSAGES = {
     guideQuickTitle: '新手引导：',
     guideQuick: '小键盘 7/4/1 是左列点 1/2/3，8/5/2 是右列点 4/5/6；按 0 提交。',
     guideMore: '完整说明',
+    // 逐方输入反馈（v7）
+    cellConfirmed: (v) => `已确认 ${v.n} 方：${v.braille}，继续输入下一方`,
+    cellNext: (v) => `第 ${v.n} 方`,
+    cellBack: (v) => `回退到第 ${v.n} 方`,
     // 实验
     expTitle: 'AudioBraille 听觉实验',
     expStart: '开始实验',
@@ -130,6 +134,7 @@ const MESSAGES = {
     notesTitle: '笔记记录器',
     notesSave: '保存',
     notesPlay: '回放',
+    notesPlayStart: '开始回放盲文音频',
     notesExport: '导出',
     notesImport: '导入',
     notesNew: '新建',
@@ -240,6 +245,10 @@ const MESSAGES = {
     guideQuickTitle: 'Quick start:',
     guideQuick: 'Keypad 7/4/1 are left-column dots 1/2/3, 8/5/2 are right-column dots 4/5/6; press 0 to submit.',
     guideMore: 'Full guide',
+    // Multi-cell input feedback (v7)
+    cellConfirmed: (v) => `Cell ${v.n} confirmed: ${v.braille}, type the next cell`,
+    cellNext: (v) => `Cell ${v.n}`,
+    cellBack: (v) => `Back to cell ${v.n}`,
     expTitle: 'AudioBraille Audio Experiment',
     expStart: 'Start Experiment',
     expIntro: 'Experiment starts. 10 trials. For each, press 0 to play the audio, then type the braille dots, press 0 to submit.',
@@ -261,6 +270,7 @@ const MESSAGES = {
     notesTitle: 'Notes',
     notesSave: 'Save',
     notesPlay: 'Playback',
+    notesPlayStart: 'Playing braille audio',
     notesExport: 'Export',
     notesImport: 'Import',
     notesNew: 'New',

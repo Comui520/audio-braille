@@ -1,4 +1,9 @@
-// src/teaching.js —— v6：四子模块 × 小节 × 学练考
+// src/teaching.js —— v7：四子模块 × 小节 × 学练考
+// v7 架构修复：
+//   1. 统一用 cells.js（toCells/gradeCells/keyHintForCells）替代本地猜测形态的函数
+//   2. 教学提示加盲文明文展示（不只告诉键位，还展示字符长啥样）
+//   3. 修复数字朗读（"1852" → "1 8 5 2" 避免 TTS 读成一千八百五十二）
+//   4. 修复逐方判定（方序固定，不能展平蒙对）
 // 小节（section）：每个子模块下再分小组，选择小节从头学；切换子模块也重置
 // 中文拼音：声母 / 韵母 / 带调音节 三个小节
 // 英文：按字母分组（a-h / i-p / q-z）
@@ -10,6 +15,18 @@ import { t } from './i18n.js'
 import { LATIN_LETTERS, latinToDots, INITIALS, FINALS, TONES, syllableToDots } from './braille-engine.js'
 import { SYMBOLS_CN, SYMBOLS_EN, CN_SYMBOL_NAMES, EN_SYMBOL_NAMES } from './data/symbols.js'
 import { playAudioBraille } from './audio-braille.js'
+import { toCells, gradeCells, keyHintForCells, cellsToUnicode, speakableDigits, cellCountLabel, cellsToDiagram } from './cells.js'
+
+// 盲文方点阵图 HTML（v7：教学展示字符的盲文长啥样）
+function diagramHtml(cells) {
+  const cellsHtml = cellsToDiagram(cells).map(c => {
+    const dots = c.dots.map((on, i) =>
+      `<span class="bd-dot${on ? ' on' : ''}" style="grid-area:d${i + 1}"></span>`
+    ).join('')
+    return `<span class="bd-cell" aria-hidden="true">${dots}</span>`
+  }).join('')
+  return `<span class="braille-diagram">${cellsHtml}<span class="bd-unicode">${cellsToUnicode(cells)}</span></span>`
+}
 
 // —— 间隔重复错题本（纯逻辑，可测）——
 export function createReviewer() {
@@ -65,14 +82,15 @@ const PINYIN_SYLLABLES = [
 ]
 
 // ===== 小节定义（section）=====
+// v7：所有 dots 用 toCells 归一化为多方数组
 // 每小节返回该组题目数组（用于顺序学习）
 export function buildSections(kind, lang = 'zh') {
   if (kind === 'latin') {
     const letters = Object.keys(LATIN_LETTERS)
     return [
-      { id: 'l1', label: 'a-h', items: letters.slice(0, 8).map(l => ({ type: 'letter', label: l, ch: l, dots: latinToDots(l) })) },
-      { id: 'l2', label: 'i-p', items: letters.slice(8, 16).map(l => ({ type: 'letter', label: l, ch: l, dots: latinToDots(l) })) },
-      { id: 'l3', label: 'q-z', items: letters.slice(16, 26).map(l => ({ type: 'letter', label: l, ch: l, dots: latinToDots(l) })) }
+      { id: 'l1', label: 'a-h', items: letters.slice(0, 8).map(l => ({ type: 'letter', label: l, ch: l, cells: toCells(latinToDots(l)) })) },
+      { id: 'l2', label: 'i-p', items: letters.slice(8, 16).map(l => ({ type: 'letter', label: l, ch: l, cells: toCells(latinToDots(l)) })) },
+      { id: 'l3', label: 'q-z', items: letters.slice(16, 26).map(l => ({ type: 'letter', label: l, ch: l, cells: toCells(latinToDots(l)) })) }
     ]
   }
   if (kind === 'symbols') {
@@ -81,18 +99,18 @@ export function buildSections(kind, lang = 'zh') {
     return [
       {
         id: 's1', label: '中文符号',
-        items: Object.keys(zhTable).map(ch => ({ type: 'symbol', label: zhNames[ch] || ch, ch, dots: zhTable[ch] }))
+        items: Object.keys(zhTable).map(ch => ({ type: 'symbol', label: zhNames[ch] || ch, ch, cells: toCells(zhTable[ch]) }))
       },
       {
         id: 's2', label: 'English symbols',
-        items: Object.keys(enTable).map(ch => ({ type: 'symbol', label: enNames[ch] || ch, ch, dots: enTable[ch] }))
+        items: Object.keys(enTable).map(ch => ({ type: 'symbol', label: enNames[ch] || ch, ch, cells: toCells(enTable[ch]) }))
       }
     ]
   }
   if (kind === 'digits') {
     return [{
       id: 'd1', label: '0-9',
-      items: DIGITS.map(d => ({ type: 'digit', label: d, ch: d, dots: [[3, 4, 5, 6], latinToDots(DIGIT_LETTER[d])] }))
+      items: DIGITS.map(d => ({ type: 'digit', label: d, ch: d, cells: toCells([[3, 4, 5, 6], latinToDots(DIGIT_LETTER[d])]) }))
     }]
   }
   // pinyin：声母 / 韵母 / 带调音节
@@ -101,29 +119,24 @@ export function buildSections(kind, lang = 'zh') {
   return [
     {
       id: 'p1', label: '声母',
-      items: initials.map(ini => ({ type: 'initial', label: ini, ch: ini, dots: INITIALS[ini] }))
+      items: initials.map(ini => ({ type: 'initial', label: ini, ch: ini, cells: toCells(INITIALS[ini]) }))
     },
     {
       id: 'p2', label: '韵母',
-      items: finals.map(fin => ({ type: 'final', label: fin, ch: fin, dots: FINALS[fin] }))
+      items: finals.map(fin => ({ type: 'final', label: fin, ch: fin, cells: toCells(FINALS[fin]) }))
     },
     {
       id: 'p3', label: '带调音节',
       items: PINYIN_SYLLABLES.map(s => ({
         type: 'syllable', initial: s.initial, final: s.final, tone: s.tone,
         label: `${s.initial}${s.final}${TONE_NAMES[s.tone] || ''}`, ch: `${s.initial}${s.final}`,
-        dots: syllableToDots(s.initial, s.final, s.tone)
+        cells: toCells(syllableToDots(s.initial, s.final, s.tone))
       }))
     }
   ]
 }
 
-// 键位 → 教学提示（官方键位：7=点1, 4=点2, 1=点3, 8=点4, 5=点5, 2=点6）
-export function keyHintForDots(dots) {
-  const KEY_FOR_DOT = { 1: '7', 2: '4', 3: '1', 4: '8', 5: '5', 6: '2' }
-  // 分方显示：每方的键位用"；"分隔
-  return dots.map(cell => cell.map(d => KEY_FOR_DOT[d]).filter(Boolean).join('')).filter(Boolean).join('；')
-}
+
 
 // —— 教学 UI（四子模块 × 小节 × 学练考）——
 export function initTeaching({ state, render, storage, kind = 'latin', lang = 'zh' }) {
@@ -137,7 +150,11 @@ export function initTeaching({ state, render, storage, kind = 'latin', lang = 'z
   let examTotal = 0
   let lessonEl = null
 
-  function setLesson(msg) { if (lessonEl) lessonEl.textContent = msg }
+  function setLesson(msg, cells = null) {
+    if (!lessonEl) return
+    // v7：文字提示 + 盲文方点阵图（明眼人看得见，屏幕阅读器读文字）
+    lessonEl.innerHTML = `<span class="lesson-text">${msg}</span>` + (cells ? diagramHtml(cells) : '')
+  }
 
   // 切换子模块：重置到该模块第一个小节
   function switchKind(k) {
@@ -179,39 +196,57 @@ export function initTeaching({ state, render, storage, kind = 'latin', lang = 'z
     }
     currentItem = currentSection.items[itemIdx]
     const L = currentItem.label
-    const hint = keyHintForDots(currentItem.dots)
+    const hint = keyHintForCells(currentItem.cells)
+    const cellCount = currentItem.cells.length
+    const countNote = cellCount > 1 ? `（${cellCountLabel(cellCount)}，每方打完按 * 进下一方）` : ''
     if (phase === 'learn') {
-      speak(t('learnItem', { label: L, hint }))
-      setLesson(t('learnItem', { label: L, hint }))
+      // v7：键位逐位朗读（避免 TTS 把 1852 读成一千八百五十二）+ 展示盲文方点阵图
+      speak(t('learnItem', { label: L, hint: speakableDigits(hint) }) + (cellCount > 1 ? `，${cellCountLabel(cellCount)}` : ''))
+      setLesson(t('learnItem', { label: L, hint }) + countNote, currentItem.cells)
+      // 学阶段同时逐方播 AudioBraille，建立“字符↔声音”关联
+      playCells(currentItem.cells)
     } else if (phase === 'practice') {
-      speak(t('practiceItem', { label: L }))
-      setLesson(t('practiceItem', { label: L }))
+      speak(t('practiceItem', { label: L }) + (cellCount > 1 ? `，${cellCountLabel(cellCount)}` : ''))
+      // 练阶段：显示盲文图作为提示，但不给键位
+      setLesson(t('practiceItem', { label: L }) + countNote, currentItem.cells)
     } else {
+      // 考阶段：无任何提示（不显示盲文图）
       speak(t('q', { label: L }) + '，' + t('press0Submit'))
-      setLesson(t('q', { label: L }) + '（' + t('press0Submit') + '）')
+      setLesson(t('q', { label: L }) + '（' + t('press0Submit') + '）' + countNote)
     }
     state.clearDots()
     itemIdx++
   }
 
+  // 逐方播放 AudioBraille（多方题不能一次传多层，否则静音）
+  function playCells(cells) {
+    toCells(cells).forEach((cell, i) => {
+      setTimeout(() => playAudioBraille(cell, { duration: 0.35 }), 900 + i * 500)
+    })
+  }
+
   function checkAnswer(dots) {
     if (!currentItem) return
-    // 数字/符号/音节：逐方比较（数字符号方 + 字母方）
-    const expected = currentItem.dots
-    const correct = gradeAnswerMulti(expected, dots)
+    // v7：统一用 gradeCells（方序固定，不能展平蒙对）
+    const correct = gradeCells(currentItem.cells, dots)
     const key = `${currentKind}:${currentItem.label}`
+    const answered = currentItem   // next() 会改 currentItem，先抓住
     if (correct) {
       speak(t('correct'))
+      setLesson(t('correct') + ' ✓ ' + answered.label, answered.cells)
       reviewer.record(key, true)
       if (phase === 'exam') { examCorrect++; examTotal++ }
     } else {
-      const hint = keyHintForDots(currentItem.dots)
-      speak(t('wrongAnswer', { expected: `${currentItem.label}（键位：${hint}）` }))
+      const hint = keyHintForCells(answered.cells)
+      // v7：错误反馈键位逐位朗读 + 展示正确盲文图
+      speak(t('wrongAnswer', { expected: `${answered.label}，键位 ${speakableDigits(hint)}` }))
+      setLesson(t('wrongAnswer', { expected: `${answered.label}（键位：${hint}）` }), answered.cells)
       reviewer.record(key, false)
       if (phase === 'exam') { examTotal++ }
     }
     state.clearDots()
-    setTimeout(next, 400)
+    // v7：错题多停一会儿，让用户看清正确答案（旧：400ms 太快，且语音被下一题打断）
+    setTimeout(next, correct ? 900 : 2600)
   }
 
   return {
@@ -294,13 +329,3 @@ export function initTeaching({ state, render, storage, kind = 'latin', lang = 'z
   }
 }
 
-// 逐方比较（数字/符号/音节多方）：每方内无序，方序固定
-export function gradeAnswerMulti(expectedCells, givenFlat) {
-  // givenFlat 是用户输入的单层点位（可能含多方展平）
-  // 简化：若用户按 * 逐方输入则 given 已是多方；此处按展平后长度比对不够精确，
-  // 但我们教学里数字题用户需输入 数字符3456 + 字母方 两方 → 展平后排序比对
-  const expFlat = expectedCells.flat().sort((a, b) => a - b)
-  const gv = Array.isArray(givenFlat[0]) ? givenFlat.flat() : givenFlat
-  const gFlat = [...gv].sort((a, b) => a - b)
-  return expFlat.length === gFlat.length && expFlat.every((v, i) => v === gFlat[i])
-}

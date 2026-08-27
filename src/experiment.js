@@ -4,12 +4,13 @@
 // 流程：
 //   点击开始 → 展示环节（先听每个点的左右声道对应关系）→ "按0进入测试"
 //   按0 → 逐题：按0听音频 → 输点位 → 按0提交 → 判定 → 下一题 → 汇总
-import { playAudioBraille } from './audio-braille.js'
+import { playAudioBraille, buildCellSequence } from './audio-braille.js'
 import { speak } from './speech.js'
 import { t } from './i18n.js'
 import { LATIN_LETTERS, latinToDots } from './braille-engine.js'
 import { INITIALS, FINALS, TONES, syllableToDots } from './braille-engine.js'
 import { SYMBOLS_CN, SYMBOLS_EN } from './data/symbols.js'
+import { toCells, gradeCells } from './cells.js'
 
 // ===== 展示环节（先听左右声道对应关系）=====
 export const SHOWCASE_DOTS = [[1], [2], [3], [4], [5], [6]]
@@ -52,52 +53,27 @@ export function pickSymbols(n = 10, lang = 'zh') {
 const DIGIT_LETTER = { '1': 'a', '2': 'b', '3': 'c', '4': 'd', '5': 'e', '6': 'f', '7': 'g', '8': 'h', '9': 'i', '0': 'j' }
 function digitDots(d) { return [[3, 4, 5, 6], latinToDots(DIGIT_LETTER[d])] }
 
-// 构建四类辨识题
+// 构建四类辨识题（v7：统一用 cells）
 export function buildTrials(mode, n = 10, lang = 'zh') {
-  if (mode === 'letters') return pickLetters(n).map(letter => ({ kind: 'letter', label: letter, dots: [latinToDots(letter)] }))
+  if (mode === 'letters') return pickLetters(n).map(letter => ({ kind: 'letter', label: letter, cells: toCells(latinToDots(letter)) }))
   if (mode === 'syllables') return pickSyllables(n).map(s => ({
     kind: 'syllable', label: `${s.initial}${s.final}${TONE_NAMES_EXT[s.tone]}`, initial: s.initial, final: s.final, tone: s.tone,
-    dots: syllableToDots(s.initial, s.final, s.tone)
+    cells: toCells(syllableToDots(s.initial, s.final, s.tone))
   }))
   if (mode === 'symbols') {
     const table = lang === 'en' ? SYMBOLS_EN : SYMBOLS_CN
-    return pickSymbols(n, lang).map(ch => ({ kind: 'symbol', label: ch, dots: table[ch] }))
+    return pickSymbols(n, lang).map(ch => ({ kind: 'symbol', label: ch, cells: toCells(table[ch]) }))
   }
   // digits
   const digits = Object.keys(DIGIT_LETTER)
-  return digits.sort(() => Math.random() - 0.5).slice(0, n).map(d => ({ kind: 'digit', label: d, dots: digitDots(d) }))
+  return digits.sort(() => Math.random() - 0.5).slice(0, n).map(d => ({ kind: 'digit', label: d, cells: toCells(digitDots(d)) }))
 }
 
-// ===== 点位比较（逐方，顺序无关）=====
-// expected 形态：单层 [1,2,4]（字母题=单方）或 多层 [[..],[..],[..]]（音节/符号/数字=多方式）
-// given 形态：单层 [1,2,4]（用户只输一方）或 多层 [[..],[..]]（用户用 * 逐方输入后 0 提交）
-// 判定规则：
-//   - expected 单层（字母题）：given 单层→单方无序比较；given 多层→取 given[0] 比较
-//   - expected 多层（多方式题）：given 必须同方数且每方点集相等（方内无序）
+// ===== 点位比较（v7：转发到 cells.gradeCells，唯一权威）=====
 export function gradeDots(expected, given) {
-  if (!Array.isArray(expected) || !Array.isArray(given)) return false
-  const isMulti = (arr) => arr.length > 0 && Array.isArray(arr[0])
-  const eMulti = isMulti(expected)
-  const gMulti = isMulti(given)
-  const s = (a) => [...a].sort((x, y) => x - y).join(',')
-
-  if (!eMulti) {
-    // 字母题：expected 单方 [1,2,4]
-    const g = gMulti ? given[0] : given
-    if (!Array.isArray(g)) return false
-    return s(expected) === s(g)
-  }
-  if (!gMulti) {
-    // 多方式题但用户只输一方 → 错误（除非 expected 也一方，已在上分支处理）
-    return false
-  }
-  if (expected.length !== given.length) return false
-  for (let i = 0; i < expected.length; i++) {
-    if (s(expected[i]) !== s(given[i])) return false
-  }
-  return true
+  return gradeCells(expected, given)
 }
-// 单方式无序比较（旧语义）
+// 单方式无序比较（旧语义，仅供旧测试）
 export function gradeDotsFlat(expected, given) {
   if (expected.length !== given.length) return false
   const s = (a) => [...a].sort((x, y) => x - y).join(',')
@@ -150,7 +126,14 @@ export function initExperiment({ state, render }) {
 
   function setStatus(msg) { const el = document.querySelector('#exp-status'); if (el) el.textContent = msg }
 
-  function playCurrentAudio() { if (current) playAudioBraille(current.dots, { duration: 0.5 }) }
+  // v7：多方题目逐方播放（旧 bug：多层点位传给 playAudioBraille 导致频率 undefined → 静音）
+  function playCurrentAudio() {
+    if (!current) return
+    const seq = buildCellSequence(current.cells)
+    seq.forEach((cell, i) => {
+      setTimeout(() => playAudioBraille(cell, { duration: 0.5 }), i * 700)
+    })
+  }
 
   function nextListen() {
     if (idx >= trials.length) {
@@ -242,13 +225,10 @@ export function initExperiment({ state, render }) {
   }
 
   function submitGuess(guessDots) {
-    // guessDots 可能是：
-    //   单层数字数组 [1,3,4]（用户只输一方）
-    //   多层数组 [[..],[..]]（用户用 * 逐方确认后 0 提交）
-    // gradeDots 自动识别：expected 多层→逐方比较；expected 单层且 given 单层→单方无序比较
-    const correct = gradeDots(current.dots, guessDots)
+    // v7：统一用 gradeCells（方数相等 + 方内无序 + 方序固定）
+    const correct = gradeCells(current.cells, guessDots)
     const elapsed = current.startTime ? (performance.now() - current.startTime) / 1000 : 0
-    exp.addTrial(current.dots, guessDots, elapsed, correct)
+    exp.addTrial(current.cells, guessDots, elapsed, correct)
     if (correct) {
       speak(t('correct')); setStatus(t('correct'))
     } else {

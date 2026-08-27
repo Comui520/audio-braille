@@ -3,13 +3,22 @@
 //   空间：左列点(1,2,3)→-90°(左耳)，右列点(4,5,6)→+90°(右耳)
 //   音高：上行(1,4)=600Hz，中行(2,5)=400Hz，下行(3,6)=250Hz
 //   波形：左列正弦，右列方波（单声道也能区分左右列）
+import { toCells } from './cells.js'
 
 export const PAN = { LEFT: -90, RIGHT: 90 }
 
 const FREQ = { 1: 600, 2: 400, 3: 250, 4: 600, 5: 400, 6: 250 }
 const WAVE = { 1: 'sine', 2: 'sine', 3: 'sine', 4: 'square', 5: 'square', 6: 'square' }
 
-export function buildChordNotes(dots) {
+// 多方 → 逐方播放序列（v7：归一化）
+export function buildCellSequence(cells) {
+  return toCells(cells)
+}
+
+// 点位数组 → 和弦音符（只接受单方，多方需逐方调用）
+// v7 修复：误传多层时取第一方而非产出 undefined 频率
+export function buildChordNotes(dotsArray) {
+  const dots = Array.isArray(dotsArray[0]) ? dotsArray[0] : dotsArray
   return dots.map(d => ({ dot: d, freq: FREQ[d], wave: WAVE[d], pan: d <= 3 ? PAN.LEFT : PAN.RIGHT }))
 }
 
@@ -40,6 +49,7 @@ export function isAudioReady() {
 }
 
 // 播放一点阵的和弦（0.25s，有点的音符同时响起）
+// v7：支持单层/多层，多层时只播第一方（调用方逐方 loop）
 // 可选 onDot(dot, on) 回调用于屏幕高亮
 // 返回 Promise，播放结束 resolve（便于顺序演奏笔记）
 export function playAudioBraille(dotsArray, { duration = 0.25, onDot = null } = {}) {

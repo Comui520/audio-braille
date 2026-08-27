@@ -170,9 +170,11 @@ export function initNotes({ state, storage, render }) {
       speak(t('notesImported'))
     },
     async playback() {
+      // v7：回放 = AudioBraille 逐方播放（如听书），不是 TTS 读明文
       const dotsSeq = extractDotsFromText(current.plain)
+      if (dotsSeq.length === 0) { speak(t('notesEmpty')); return }
       const { playAudioBraille } = await import('./audio-braille.js')
-      speak(current.plain.replace(/[\u2800-\u28ff]/g, ' ').trim() || t('notesEmpty'))
+      speak(t('notesPlayStart'))
       for (const dots of buildPlaybackSequence(dotsSeq)) {
         await playAudioBraille(dots, { duration: 0.2 })
         await new Promise(r => setTimeout(r, 300))   // 方间 0.3s

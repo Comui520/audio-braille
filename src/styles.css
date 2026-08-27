@@ -489,3 +489,25 @@ textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+/* 盲文方点阵图（v7：教学"这个字的盲文长啥样"） */
+.braille-diagram { display: inline-flex; gap: 1em; align-items: center; margin-left: 1em; vertical-align: middle; }
+.bd-cell {
+  display: inline-grid;
+  grid-template: repeat(3, 0.45em) / repeat(2, 0.45em);
+  gap: 0.25em;
+  padding: 0.5em 0.35em;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
+.bd-dot {
+  width: 0.45em;
+  height: 0.45em;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.2;
+}
+.bd-dot.on { background: var(--accent); opacity: 1; box-shadow: 0 0 4px var(--accent); }
+.bd-unicode { font-size: 2em; font-weight: 700; color: var(--accent); letter-spacing: 0.1em; }
+.lesson-text { display: inline-block; vertical-align: middle; }
