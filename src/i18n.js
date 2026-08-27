@@ -1,4 +1,4 @@
-// src/i18n.js —— 中英双语文案（TTS 提示语 + 屏幕文案）
+﻿// src/i18n.js —— 中英双语文案（TTS 提示语 + 屏幕文案）
 
 const LANG_KEY = 'AudioBraille.lang'
 

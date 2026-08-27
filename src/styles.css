@@ -569,3 +569,335 @@ textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3
   display: inline-block;
   vertical-align: middle;
 }
+
+/* ===== v8 教学页面样式 ===== */
+
+/* 教学首页（四大卡片网格）*/
+.teaching-home-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin: 2rem 0;
+}
+
+.teaching-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 2rem 1.5rem;
+  background: linear-gradient(135deg, var(--card), var(--bg-soft));
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow);
+}
+
+.teaching-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+
+.card-icon {
+  font-size: 3em;
+}
+
+.card-label {
+  font-size: 1.3em;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.card-progress {
+  font-size: 0.95em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* 分类页（小节块）*/
+.section-block {
+  margin: 2rem 0;
+  padding: 1.5rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.section-block h3 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.8rem;
+  font-size: 1.2em;
+  color: var(--fg);
+}
+
+.progress-text {
+  font-size: 0.9em;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.progress-bar {
+  height: 8px;
+  background: var(--bg-soft);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width 0.3s ease;
+}
+
+.item-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 1rem 0;
+}
+
+.item-btn {
+  padding: 0.5em 1em;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-soft);
+  color: var(--fg);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1em;
+  transition: all 0.15s ease;
+  min-width: 3em;
+  text-align: center;
+}
+
+.item-btn:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.item-btn.learned {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.item-btn.current {
+  border-color: var(--accent-2);
+  border-width: 3px;
+  box-shadow: 0 0 8px var(--accent-2);
+}
+
+.continue-btn {
+  margin-top: 1rem;
+  padding: 0.7em 1.5em;
+  border: 2px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 1em;
+  transition: all 0.2s ease;
+}
+
+.continue-btn:hover {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+  transform: translateY(-2px);
+}
+
+/* 单项学习页 */
+.back-btn {
+  padding: 0.5em 1em;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 0.95em;
+  margin-bottom: 1rem;
+  transition: all 0.15s ease;
+}
+
+.back-btn:hover {
+  border-color: var(--accent);
+  background: var(--bg-soft);
+}
+
+.item-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  margin: 2rem 0;
+  padding: 2rem;
+  background: var(--card);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.braille-large {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.bd-cell-large {
+  display: grid;
+  grid-template-columns: repeat(2, 1em);
+  grid-template-rows: repeat(3, 1em);
+  grid-template-areas:
+    "d1 d4"
+    "d2 d5"
+    "d3 d6";
+  gap: 0.5em;
+  padding: 1em 0.7em;
+  border: 3px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-soft);
+}
+
+.bd-dot-large {
+  width: 1em;
+  height: 1em;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.25;
+}
+
+.bd-dot-large.on {
+  background: var(--accent);
+  opacity: 1;
+  box-shadow: 0 0 12px var(--accent);
+}
+
+.bd-dot-large:nth-child(1) { grid-area: d1; }
+.bd-dot-large:nth-child(2) { grid-area: d4; }
+.bd-dot-large:nth-child(3) { grid-area: d2; }
+.bd-dot-large:nth-child(4) { grid-area: d5; }
+.bd-dot-large:nth-child(5) { grid-area: d3; }
+.bd-dot-large:nth-child(6) { grid-area: d6; }
+
+.bd-unicode-large {
+  font-size: 4em;
+  font-weight: 700;
+  color: var(--accent);
+  text-shadow: 0 0 16px var(--accent);
+}
+
+.item-info {
+  text-align: center;
+}
+
+.item-info p {
+  font-size: 1.2em;
+  margin-bottom: 1rem;
+}
+
+.play-btn {
+  padding: 0.8em 2em;
+  border: 2px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 1.1em;
+  transition: all 0.2s ease;
+}
+
+.play-btn:hover {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+  transform: scale(1.05);
+}
+
+.phase-selector {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin: 2rem 0;
+}
+
+.phase-btn {
+  padding: 0.8em 2em;
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-soft);
+  color: var(--fg);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1em;
+  transition: all 0.2s ease;
+}
+
+.phase-btn:hover {
+  border-color: var(--accent);
+  background: var(--card);
+}
+
+.phase-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(56,189,248,0.4);
+}
+
+.phase-hint {
+  text-align: center;
+  font-size: 1.1em;
+  color: var(--muted);
+  margin: 1.5rem 0;
+}
+
+.item-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.item-nav button, .item-nav span {
+  flex: 1;
+  max-width: 200px;
+}
+
+.nav-prev, .nav-next {
+  padding: 0.7em 1.5em;
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-soft);
+  color: var(--fg);
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.nav-prev:hover, .nav-next:hover {
+  border-color: var(--accent);
+  background: var(--card);
+}
+
+.mark-learned-btn {
+  padding: 0.8em 2em;
+  border: 2px solid var(--ok);
+  border-radius: 999px;
+  background: var(--ok);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 1.1em;
+  transition: all 0.2s ease;
+}
+
+.mark-learned-btn:hover {
+  background: #059669;
+  border-color: #059669;
+  transform: scale(1.05);
+}

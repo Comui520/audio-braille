@@ -1,7 +1,7 @@
 // src/app.js —— v5：首页三入口 + 六页导航（学习/输入/测试/笔记/听书）
 import { createStorage, loadSettings, saveSettings } from './storage.js'
 import { initInput } from './input.js'
-import { initTeaching } from './teaching.js'
+import { initTeaching } from './teaching-v8.js'
 import { initNotes } from './notes.js'
 import { initExperiment } from './experiment.js'
 import { createReader, SAMPLE_TEXT, clampSpeed } from './reader.js'
