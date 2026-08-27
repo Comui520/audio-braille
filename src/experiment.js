@@ -69,19 +69,29 @@ export function buildTrials(mode, n = 10, lang = 'zh') {
 }
 
 // ===== 点位比较（逐方，顺序无关）=====
-// 支持两种输入：
-//   单方式 [1,2,4]（旧兼容）
-//   多方式 [[5],[2,3]]（标点/数字/音节，各方独立测），或 [[1,3,4],[3,5],[1]]（各方同维度）
-// 判定：若 expected 是单层数字数组→单方无序比较；若各方元素是数组→逐方比较各点子集
+// expected 形态：单层 [1,2,4]（字母题=单方）或 多层 [[..],[..],[..]]（音节/符号/数字=多方式）
+// given 形态：单层 [1,2,4]（用户只输一方）或 多层 [[..],[..]]（用户用 * 逐方输入后 0 提交）
+// 判定规则：
+//   - expected 单层（字母题）：given 单层→单方无序比较；given 多层→取 given[0] 比较
+//   - expected 多层（多方式题）：given 必须同方数且每方点集相等（方内无序）
 export function gradeDots(expected, given) {
   if (!Array.isArray(expected) || !Array.isArray(given)) return false
-  // 单方：expected = [1,2,4]（数字元素）
-  if (expected.every(x => typeof x === 'number')) {
-    return gradeDotsFlat(expected, given)
-  }
-  // 多方式：expected = [[...],[...]]
-  if (expected.length !== given.length) return false
+  const isMulti = (arr) => arr.length > 0 && Array.isArray(arr[0])
+  const eMulti = isMulti(expected)
+  const gMulti = isMulti(given)
   const s = (a) => [...a].sort((x, y) => x - y).join(',')
+
+  if (!eMulti) {
+    // 字母题：expected 单方 [1,2,4]
+    const g = gMulti ? given[0] : given
+    if (!Array.isArray(g)) return false
+    return s(expected) === s(g)
+  }
+  if (!gMulti) {
+    // 多方式题但用户只输一方 → 错误（除非 expected 也一方，已在上分支处理）
+    return false
+  }
+  if (expected.length !== given.length) return false
   for (let i = 0; i < expected.length; i++) {
     if (s(expected[i]) !== s(given[i])) return false
   }
@@ -227,9 +237,13 @@ export function initExperiment({ state, render }) {
   }
 
   function submitGuess(guessDots) {
-    const correct = gradeDots(current.dots, [guessDots])
+    // guessDots 可能是：
+    //   单层数字数组 [1,3,4]（用户只输一方）
+    //   多层数组 [[..],[..]]（用户用 * 逐方确认后 0 提交）
+    // gradeDots 自动识别：expected 多层→逐方比较；expected 单层且 given 单层→单方无序比较
+    const correct = gradeDots(current.dots, guessDots)
     const elapsed = current.startTime ? (performance.now() - current.startTime) / 1000 : 0
-    exp.addTrial(current.dots, [guessDots], elapsed, correct)
+    exp.addTrial(current.dots, guessDots, elapsed, correct)
     if (correct) {
       speak(t('correct')); setStatus(t('correct'))
     } else {

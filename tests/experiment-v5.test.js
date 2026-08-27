@@ -1,6 +1,6 @@
 // tests/experiment-v5.test.js
 import { describe, it, expect } from 'vitest'
-import { SHOWCASE_DOTS, buildShowcase, pickLetters, pickSymbols, buildTrials } from '../src/experiment.js'
+import { SHOWCASE_DOTS, buildShowcase, pickLetters, pickSymbols, buildTrials, gradeDots } from '../src/experiment.js'
 
 describe('AudioBraille 展示环节（v5）', () => {
   it('SHOWCASE_DOTS：左列1/2/3 + 右列4/5/6', () => {
@@ -48,5 +48,35 @@ describe('四类辨识题源（v5）', () => {
     const t = buildTrials('symbols', 5)
     expect(t).toHaveLength(5)
     expect(t[0].dots).toBeDefined()
+  })
+})
+
+describe('gradeDots 多方式判定（P0 修复）', () => {
+  it('字母题：expected 单层 [1,2,4]，given 单层无序比较', () => {
+    expect(gradeDots([1, 2, 4], [4, 1, 2])).toBe(true)
+    expect(gradeDots([1, 2, 4], [1, 2, 5])).toBe(false)
+  })
+  it('字母题：given 多层时取 first', () => {
+    expect(gradeDots([1, 2, 4], [[4, 1, 2]])).toBe(true)
+  })
+  it('音节题：expected 多层 [[1,3,4],[3,5],[1]]，given 同构多方 → true', () => {
+    expect(gradeDots([[1, 3, 4], [3, 5], [1]], [[1, 3, 4], [3, 5], [1]])).toBe(true)
+    expect(gradeDots([[1, 3, 4], [3, 5], [1]], [[4, 3, 1], [5, 3], [1]])).toBe(true)   // 方内无序
+  })
+  it('音节题：expected 3方 but given 2方 → false', () => {
+    expect(gradeDots([[1, 3, 4], [3, 5], [1]], [[1, 3, 4], [3, 5]])).toBe(false)
+  })
+  it('音节题：given 单层（用户没按*直接0提交）→ false', () => {
+    expect(gradeDots([[1, 3, 4], [3, 5], [1]], [1, 3, 4, 3, 5, 1])).toBe(false)
+  })
+  it('数字题：expected [[3,4,5,6],[1]]，given 同构 → true', () => {
+    expect(gradeDots([[3, 4, 5, 6], [1]], [[3, 4, 5, 6], [1]])).toBe(true)
+  })
+  it('符号题：expected [[5],[2,3]]（句号），given 同构 → true', () => {
+    expect(gradeDots([[5], [2, 3]], [[5], [2, 3]])).toBe(true)
+    expect(gradeDots([[5], [2, 3]], [[5], [3, 2]])).toBe(true)
+  })
+  it('符号题：given 各方点集不同 → false', () => {
+    expect(gradeDots([[5], [2, 3]], [[5], [3]])).toBe(false)
   })
 })

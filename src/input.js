@@ -60,7 +60,7 @@ export function dotsToReadable(dots) {
 
 // DOM 接入：绑定全局 keydown（由 app.js 调用）
 export function initInput({ state, render, settings }) {
-  const buffers = { initial: null, final: null, tone: null }
+  const buffers = { initial: null, final: null, tone: null, experimentCells: [] }
   const withTone = () => settings.toneMode !== false
   const inputMode = () => resolveInputMode(settings)
 
@@ -98,8 +98,19 @@ export function initInput({ state, render, settings }) {
           render()
           return
         }
-        // 实验模式：统一入口 handleKey0（有点位=提交猜测；无点位=播放音频）
+        // 实验模式：统一入口 handleKey0（有点位=提交猜测；无点位=播放音频；有已确认多方则合并提交）
         if (state.currentPage === 'experiment' && onExperimentSubmit) {
+          // 若已用 * 确认过一方或多方，把当前方并进去一起提交
+          if (buffers.experimentCells && buffers.experimentCells.length > 0) {
+            const allCells = [...buffers.experimentCells]
+            if (dots.length > 0) allCells.push(dots)
+            buffers.experimentCells = []
+            state.clearDots()
+            feedbackEl.textContent = ''
+            onExperimentSubmit(allCells)
+            render()
+            return
+          }
           onExperimentSubmit(dots)
           render()
           return
@@ -121,6 +132,11 @@ export function initInput({ state, render, settings }) {
       case '3': {   // 退格
         e.preventDefault()
         if (state.currentPage === 'teaching' || state.currentPage === 'experiment') {
+          // 实验：回退到上一方；教学：清当前点位
+          if (state.currentPage === 'experiment' && buffers.experimentCells && buffers.experimentCells.length > 0) {
+            buffers.experimentCells.pop()
+            feedbackEl.textContent = `回退到 ${buffers.experimentCells.length} 方`
+          }
           state.clearDots()
           feedbackEl.textContent = ''
           render()
@@ -133,6 +149,7 @@ export function initInput({ state, render, settings }) {
       case '-': {   // 清空
         e.preventDefault()
         buffers.initial = buffers.final = buffers.tone = null
+        buffers.experimentCells = []
         state.brailleDots = [false, false, false, false, false, false]
         state.inputStage = 'initial'
         feedbackEl.textContent = ''
@@ -154,16 +171,40 @@ export function initInput({ state, render, settings }) {
         onInsert(' ')
         break
       }
-      case '*': {   // 下一个：进入下一阶段（拼音：声母→韵母→声调）
+      case '*': {   // 下一个：确认当前方，进入下一方（实验/拼音教学逐方输入）
         e.preventDefault()
+        if (state.currentPage === 'experiment' && onExperimentSubmit) {
+          // 实验：确认当前方（push 到 buffers），进入下一方
+          const dots = state.brailleDots.map((v, i) => (v ? i + 1 : 0)).filter(Boolean)
+          if (dots.length > 0) {
+            buffers.experimentCells = buffers.experimentCells || []
+            buffers.experimentCells.push(dots)
+            state.clearDots()
+            feedbackEl.textContent = `已确认 ${buffers.experimentCells.length} 方，继续输入下一方`
+            render()
+          } else {
+            speak(t('noDots'))
+          }
+          return
+        }
         if (state.currentPage !== 'teaching') break
         state.inputStage = nextStageAfterConfirm(state.inputStage, withTone())
         speak(cellLabel(state.inputStage))
         render()
         break
       }
-      case '/': {   // 上一个：回退到上一阶段
+      case '/': {   // 上一个：回退到上一方（实验）或上一阶段（拼音教学）
         e.preventDefault()
+        if (state.currentPage === 'experiment' && onExperimentSubmit) {
+          // 实验：回退到上一方
+          if (buffers.experimentCells && buffers.experimentCells.length > 0) {
+            buffers.experimentCells.pop()
+            state.clearDots()
+            feedbackEl.textContent = `回退到 ${buffers.experimentCells.length} 方`
+            render()
+          }
+          return
+        }
         if (state.currentPage !== 'teaching') break
         state.inputStage = prevCell(state.inputStage)
         speak(cellLabel(state.inputStage))
@@ -196,7 +237,7 @@ export function initInput({ state, render, settings }) {
     setTeachingSubmit(fn) { onTeachingSubmit = fn },
     setExperimentSubmit(fn) { onExperimentSubmit = fn },
     feedbackEl,
-    clearBuffers() { buffers.initial = buffers.final = buffers.tone = null },
+    clearBuffers() { buffers.initial = buffers.final = buffers.tone = null; buffers.experimentCells = [] },
     resetInput() { this.clearBuffers(); state.brailleDots = [false, false, false, false, false, false]; state.inputStage = 'initial'; feedbackEl.textContent = '' }
   }
 }
