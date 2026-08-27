@@ -30,7 +30,58 @@ export const TONES = { '1': [1], '2': [2], '3': [3], '4': [2, 3] }
 
 const KEY = (arr) => [...arr].sort((a, b) => a - b).join(',')
 
-// 点位 → Unicode（U+2800 + 位掩码：点1=0x01 … 点6=0x20）
+// ===== 盲文数字（国际标准：数字符号 + a-j） =====
+// 数字符号 = 点3456（U+283C）；其后 a-j 对应 1-0（a=1, b=2, ..., i=9, j=0）
+export const DIGIT_SIGN = [3, 4, 5, 6]
+export const DIGIT_LETTERS = { a: '1', b: '2', c: '3', d: '4', e: '5', f: '6', g: '7', h: '8', i: '9', j: '0' }
+const LETTER_DIGITS = Object.fromEntries(Object.entries(DIGIT_LETTERS).map(([k, v]) => [k, v]))
+
+// 单个数字 → Unicode（数字符号 + 对应字母方）
+export function digitToUnicode(digit) {
+  const letter = Object.keys(DIGIT_LETTERS).find(k => DIGIT_LETTERS[k] === String(digit))
+  if (!letter) return null
+  return dotsToUnicode(DIGIT_SIGN) + dotsToUnicode(LATIN_LETTERS[letter])
+}
+
+// 数字串 → Unicode（每个数字都带数字符号，符合国际盲文规则）
+export function digitsToUnicode(numStr) {
+  return [...numStr].map(d => digitToUnicode(d)).join('')
+}
+
+// Unicode 盲文文本 → 数字串（识别 数字符号+字母 对；无数字符号返回 null）
+export function unicodeToDigits(text) {
+  const chars = [...text]
+  const digitSignMask = maskOf(DIGIT_SIGN)
+  let out = ''
+  let i = 0
+  while (i < chars.length) {
+    const mask = chars[i].codePointAt(0) - 0x2800
+    if (mask !== digitSignMask) return null   // 遇到非数字符号立即失败
+    i++
+    if (i >= chars.length) return null
+    const letterMask = chars[i].codePointAt(0) - 0x2800
+    const letter = latinReverseMask()[letterMask]
+    if (!letter || !LETTER_DIGITS[letter]) return null
+    out += LETTER_DIGITS[letter]
+    i++
+  }
+  return out || null
+}
+
+// 点阵掩码（辅助）
+function maskOf(dots) {
+  return [...dots].reduce((acc, d) => acc | (1 << (d - 1)), 0)
+}
+
+// 掩码 → 拉丁字母（反查 LATIN_LETTERS，惰性求值：LATIN_LETTERS 在下方定义）
+let LATIN_REVERSE_MASK = null
+function latinReverseMask() {
+  if (!LATIN_REVERSE_MASK) {
+    LATIN_REVERSE_MASK = Object.fromEntries(Object.entries(LATIN_LETTERS).map(([k, v]) => [maskOf(v), k]))
+  }
+  return LATIN_REVERSE_MASK
+}
+
 export function dotsToUnicode(dots) {
   const mask = [...dots].reduce((acc, d) => acc | (1 << (d - 1)), 0)
   return String.fromCodePoint(0x2800 + mask)
