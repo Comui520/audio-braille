@@ -22,7 +22,7 @@ export function createAppState() {
     },
     clearDots() {
       state.brailleDots = [false, false, false, false, false, false]
-      state.inputStage = 'initial'
+      // 不重置 inputStage —— 由 input.js 的确认/退格流程显式管理阶段
     }
   }
   return state

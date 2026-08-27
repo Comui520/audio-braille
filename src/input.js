@@ -83,7 +83,8 @@ export function initInput({ state, render, settings }) {
       case '-': {   // 清空
         e.preventDefault()
         buffers.initial = buffers.final = buffers.tone = null
-        state.clearDots()
+        state.brailleDots = [false, false, false, false, false, false]
+        state.inputStage = 'initial'
         speak('已清空')
         render()
         break
@@ -115,7 +116,8 @@ export function initInput({ state, render, settings }) {
       await new Promise(r => setTimeout(r, 100))
     }
     buffers.initial = buffers.final = buffers.tone = null
-    state.clearDots()
+    state.brailleDots = [false, false, false, false, false, false]
+    state.inputStage = 'initial'
   }
 
   // 注入的 UI 回调（app.js 提供）
@@ -126,7 +128,7 @@ export function initInput({ state, render, settings }) {
     setBackspaceHandler(fn) { onBackspace = fn },
     clearBuffers() { buffers.initial = buffers.final = buffers.tone = null },
     // 供 app.js 在输入模式/页面切换时清空阶段
-    resetInput() { this.clearBuffers(); state.clearDots() }
+    resetInput() { this.clearBuffers(); state.brailleDots = [false, false, false, false, false, false]; state.inputStage = 'initial' }
   }
 }
 
