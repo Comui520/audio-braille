@@ -25,15 +25,16 @@ describe('v9 app state', () => {
   it('标签切换不改变顶层页面', () => {
     const state = navigate(createAppState(), 'experiment')
     const experimentState = selectExperimentTab(state, 'reader')
-    expect(experimentState).toMatchObject({
-      page: 'experiment',
-      experimentTab: 'reader'
-    })
+    expect(experimentState).toMatchObject({ page: 'experiment', experimentTab: 'reader' })
     expect(selectLearningTab(experimentState, 'input')).toMatchObject({
-      page: 'experiment',
-      experimentTab: 'reader',
-      learningTab: 'input'
+      page: 'experiment', experimentTab: 'reader', learningTab: 'input'
     })
+  })
+
+  it('默认没有进入正式实验，正式阶段从同意开始', () => {
+    const state = createAppState()
+    expect(state.experiment.researchMode).toBe('casual')
+    expect(state.experiment.formalPhase).toBe(null)
   })
 
   it('教学位置可以逐层更新', () => {

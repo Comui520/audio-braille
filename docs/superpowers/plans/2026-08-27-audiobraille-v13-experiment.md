@@ -71,9 +71,12 @@ describe('实验协议', () => {
       .toBe('sighted-braille-naive')
   })
 
-  it('拒绝缺少正式同意标记的记录', () => {
+  it('拒绝缺少正式同意或会话字段的记录', () => {
     expect(validateFormalRecord({ dataClass: 'formal' }).valid).toBe(false)
-    expect(validateFormalRecord({ dataClass: 'formal', consentAccepted: true }).valid).toBe(true)
+    expect(validateFormalRecord({ dataClass: 'formal', consentAccepted: true }).valid).toBe(false)
+    expect(validateFormalRecord({
+      dataClass: 'formal', consentAccepted: true, studyVersion: 'v13-1', participantId: 'p1', sessionId: 's1'
+    }).valid).toBe(true)
   })
 })
 ```

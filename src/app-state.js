@@ -10,7 +10,13 @@ export function createAppState() {
     experimentTab: 'recognition',
     teaching: { category: null, section: null, item: null, phase: 'learn', tone: null },
     input: { confirmedCells: [], currentDots: [], cursorIndex: 0 },
-    experiment: { mode: 'letters', stage: 'idle', trials: [], index: 0 },
+    experiment: {
+      mode: 'letters', stage: 'idle', trials: [], index: 0, results: [],
+      researchMode: 'casual', formalPhase: null,
+      participantId: null, sessionId: null, profile: null,
+      consentAccepted: false, trainingCompleted: false,
+      uploadStatus: 'idle'
+    },
     audioUnlocked: false
   }
 }
