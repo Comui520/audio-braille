@@ -47,7 +47,7 @@ export function createStorage() {
       if (format === 'brf') {
         return notes.map(n => n.dotsSeq.map(d => d.join('') || ' ').join(' ') + '\n' + n.plain + '\n').join('\n')
       }
-      return JSON.stringify({ app: 'AudioBraille', version: 1, notes }, null, 2)
+      return JSON.stringify({ app: 'AudioBraille', version: 2, notes }, null, 2)
     },
 
     async importNotes(content, format = 'json') {

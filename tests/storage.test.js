@@ -22,7 +22,7 @@ describe('storage 抽象层（IndexedDB）', () => {
     const json = await storage.exportNotes('json')
     const parsed = JSON.parse(json)
     expect(parsed.app).toBe('AudioBraille')
-    expect(parsed.version).toBe(1)
+    expect(parsed.version).toBe(2)
     expect(parsed.notes).toHaveLength(1)
     // 清空后导入
     await storage.clearAll()
@@ -31,6 +31,28 @@ describe('storage 抽象层（IndexedDB）', () => {
     expect(await storage.loadNotes()).toHaveLength(1)
   })
 
+  it('JSON 导出保留多方文档单元边界', async () => {
+    await storage.saveNote({
+      id: 'n1',
+      title: '测试',
+      plain: '⠍⠔⠁\n⠞',
+      dotsSeq: [[1, 3, 4], [3, 5], [1], [2, 3, 4, 5]],
+      documentCells: [
+        [[1, 3, 4], [3, 5], [1]],
+        { kind: 'text', value: '\n' },
+        [[2, 3, 4, 5]]
+      ]
+    })
+    const json = await storage.exportNotes('json')
+    await storage.clearAll()
+    await storage.importNotes(json, 'json')
+    const notes = await storage.loadNotes()
+    expect(notes[0].documentCells).toEqual([
+      [[1, 3, 4], [3, 5], [1]],
+      { kind: 'text', value: '\n' },
+      [[2, 3, 4, 5]]
+    ])
+  })
   it('.brf 导出/导入 round-trip', async () => {
     await storage.saveNote({ id: 'n1', title: 't', plain: '妈', dotsSeq: [[1, 3, 4], [3, 5], [1]] })
     const brf = await storage.exportNotes('brf')

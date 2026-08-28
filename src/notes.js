@@ -47,6 +47,20 @@ export function buildPinyinReference(dotsSeq) {
   return formatPinyinReference(dotsSeq)
 }
 
+export function buildNotePayload({ title = '', plain = '', dotsSeq = [], documentCells = null } = {}) {
+  const payload = {
+    title,
+    plain,
+    dotsSeq: Array.isArray(dotsSeq) ? dotsSeq.map(dots => [...dots]) : []
+  }
+  if (Array.isArray(documentCells)) {
+    payload.documentCells = documentCells.map(unit => Array.isArray(unit)
+      ? unit.map(cell => Array.isArray(cell) ? [...cell] : cell)
+      : (unit && typeof unit === 'object' ? { ...unit } : unit))
+  }
+  return payload
+}
+
 // v9 笔记播放标签，明确区分两种完全不同的播放方式
 export function getNotePlaybackLabel(mode, lang = 'zh') {
   if (lang === 'en') return mode === 'tts' ? 'Read text (TTS)' : 'Play AudioBraille'
@@ -60,7 +74,7 @@ export function buildNotePlaybackCells(text) {
 // —— 笔记 UI（由 app.js 调用）——
 // textarea + 快捷键：Ctrl+S 保存、Ctrl+O 历史、Ctrl+N 新建
 // 回放：+ 键朗读明文 + playAudioBraille 逐方演奏（每方间隔 0.3s）
-export function initNotes({ state, storage, render }) {
+export function initNotes({ state, storage, render, getDocumentCells = null, setDocument = null } = {}) {
   let current = { id: null, title: '', plain: '', dotsSeq: [] }
   return {
     view() {
@@ -109,10 +123,13 @@ export function initNotes({ state, storage, render }) {
     },
     async save() {
       const textarea = document.querySelector('#note-textarea')
-      current.plain = textarea.value
-      current.dotsSeq = extractDotsFromText(textarea.value)
-      if (!current.id) current.id = crypto.randomUUID()
-      if (!current.title) current.title = new Date().toLocaleString()
+      current = buildNotePayload({
+        title: current.title || new Date().toLocaleString(),
+        plain: textarea.value,
+        dotsSeq: extractDotsFromText(textarea.value),
+        documentCells: getDocumentCells?.()
+      })
+      current.id = current.id || crypto.randomUUID()
       await storage.saveNote(current)
       speak(t('notesSaved'))
     },
@@ -122,6 +139,7 @@ export function initNotes({ state, storage, render }) {
       current = notes.find(n => n.id === id) ?? current
       const ta = document.querySelector('#note-textarea')
       ta.value = current.plain
+      setDocument?.(current.documentCells, current.plain)
       this.updateReference()
     },
     newNote() {
@@ -137,9 +155,15 @@ export function initNotes({ state, storage, render }) {
       const ta = document.querySelector('#note-textarea')
       const text = ta?.value || ''
       const dotsSeq = extractDotsFromText(text)
+      const note = buildNotePayload({
+        title: new Date().toLocaleString(),
+        plain: text,
+        dotsSeq,
+        documentCells: getDocumentCells?.()
+      })
       const blob = format === 'brf'
         ? new Blob([dotsSeq.map(d => d.join('') || ' ').join(' ') + '\n' + text.replace(/[\u2800-\u28ff]/g, ' ').trim() + '\n'], { type: 'text/plain' })
-        : new Blob([JSON.stringify({ app: 'AudioBraille', version: 1, note: { title: new Date().toLocaleString(), plain: text, dotsSeq } }, null, 2)], { type: 'application/json' })
+        : new Blob([JSON.stringify({ app: 'AudioBraille', version: 2, note }, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -163,6 +187,7 @@ export function initNotes({ state, storage, render }) {
         if (ta) {
           ta.value = dotsSeq.map(d => dotsToUnicode(d)).join('') + (plain ? '\n' + plain : '')
           current = { id: null, title: '', plain: ta.value, dotsSeq }
+          setDocument?.(null, current.plain)
           this.updateReference()
         }
       } else {
@@ -172,8 +197,15 @@ export function initNotes({ state, storage, render }) {
         if (note) {
           const ta = document.querySelector('#note-textarea')
           if (ta) {
-            ta.value = note.plain || ''
-            current = { id: null, title: note.title || '', plain: note.plain || '', dotsSeq: note.dotsSeq || [] }
+            const imported = buildNotePayload({
+              title: note.title || '',
+              plain: note.plain || '',
+              dotsSeq: note.dotsSeq || [],
+              documentCells: note.documentCells
+            })
+            current = { ...imported, id: null }
+            ta.value = current.plain
+            setDocument?.(current.documentCells, current.plain)
             this.updateReference()
           }
         }

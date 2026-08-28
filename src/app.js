@@ -135,7 +135,16 @@ export function initApp() {
   let state = createAppState()
   const storage = createStorage()
   const progress = createProgressStore(storage)
-  const notes = initNotes({ state, storage, render })
+  const notes = initNotes({
+    state,
+    storage,
+    render,
+    getDocumentCells: () => editorDocuments.notes?.cells,
+    setDocument: (cells, fallbackText = '') => {
+      if (Array.isArray(cells)) editorControllers.notes.setDocument(cells, cells.length)
+      else loadEditorText('notes', fallbackText)
+    }
+  })
   const reader = createReader({ onTick: (position, total) => {
     const el = document.querySelector('#reader-progress')
     if (el) el.textContent = `${position} / ${total}`
@@ -340,7 +349,7 @@ export function initApp() {
     const importFile = document.querySelector('#note-import-file')
     importFile?.addEventListener('change', () => {
       const file = importFile.files?.[0]
-      if (file) void notes.importNote(file).then(() => loadEditorText('notes', document.querySelector('#note-textarea')?.value || ''))
+      if (file) void notes.importNote(file)
     })
   }
 
