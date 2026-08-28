@@ -115,12 +115,86 @@ export function createExperiment() {
 }
 export function summarize(exp) { return exp.summarize() }
 
-// ===== UI 接线 =====
+// ===== 纯逻辑实验模型（v9）=====
+export const EXPERIMENT_TABS = ['recognition', 'reader']
+export function getExperimentTabs() { return [...EXPERIMENT_TABS] }
+
+export function createExperimentModel({ trialCount = 10, lang = 'zh' } = {}) {
+  const modes = ['letters', 'syllables', 'symbols', 'digits']
+  let mode = 'letters'
+  let stage = 'idle'
+  let trials = []
+  let index = 0
+  let results = []
+
+  function snapshot() {
+    return {
+      mode,
+      stage,
+      trials: trials.map(trial => ({ ...trial, cells: trial.cells.map(cell => [...cell]) })),
+      index,
+      results: results.map(result => ({ ...result }))
+    }
+  }
+
+  function selectMode(nextMode) {
+    if (!modes.includes(nextMode)) return snapshot()
+    mode = nextMode
+    stage = 'idle'
+    trials = []
+    index = 0
+    results = []
+    return snapshot()
+  }
+
+  function start(nextMode = mode) {
+    if (modes.includes(nextMode)) mode = nextMode
+    trials = buildTrials(mode, trialCount, lang)
+    index = 0
+    results = []
+    stage = 'showcase'
+    return snapshot()
+  }
+
+  function confirmShowcase() {
+    if (stage !== 'showcase') return snapshot()
+    stage = trials.length > 0 ? 'listen' : 'done'
+    return snapshot()
+  }
+
+  function listen() {
+    if (stage !== 'listen') return snapshot()
+    stage = 'answer'
+    return snapshot()
+  }
+
+  function submit(given) {
+    if (stage === 'listen') stage = 'answer'
+    if (stage !== 'answer' || !trials[index]) return { correct: false, state: snapshot() }
+    const trial = trials[index]
+    const correct = gradeCells(trial.cells, given)
+    results.push({ index, label: trial.label, correct })
+    index += 1
+    stage = index >= trials.length ? 'done' : 'listen'
+    return { correct, state: snapshot() }
+  }
+
+  function restart() {
+    stage = 'idle'
+    trials = []
+    index = 0
+    results = []
+    return snapshot()
+  }
+
+  return { snapshot, selectMode, start, confirmShowcase, listen, submit, restart }
+}
+// ===== 旧 UI 适配层（任务 7 会移除页面接线）=====
 export function initExperiment({ state, render }) {
   const exp = createExperiment()
   let stage = 'idle'       // idle | showcase | confirm | listen | answer | done
   let mode = 'letters'     // letters | syllables | symbols | digits
-  let current = null       // { kind, label, dots[], startTime }
+  let current = null       // { kind, label, cells[], startTime }
   let trials = []
   let idx = 0
 

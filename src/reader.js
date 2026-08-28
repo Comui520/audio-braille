@@ -46,19 +46,25 @@ export function createReader({ onTick = null } = {}) {
   let speed = 1
   let playing = false
   let stopFlag = false
+  let position = 0
+  let total = 0
   return {
     setSpeed(s) { speed = clampSpeed(s) },
     getSpeed() { return speed },
+    snapshot() { return { playing, speed, position, total } },
     async play(text) {
       if (playing) return
       playing = true
       stopFlag = false
+      position = 0
       const seq = buildReadingDots(text)
+      total = seq.length
       for (let i = 0; i < seq.length; i++) {
         if (stopFlag) break
-        const dur = Math.max(0.05, 0.5 / speed)   // 倍速：越快每方越短
+        const dur = Math.max(0.05, 0.5 / speed)
         await playAudioBraille(seq[i], { duration: dur })
-        onTick?.(i + 1, seq.length)
+        position = i + 1
+        onTick?.(position, total)
         await new Promise(r => setTimeout(r, 100 / speed))
       }
       playing = false
