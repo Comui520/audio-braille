@@ -14,7 +14,7 @@ import { speak, speakAndWait, cancelSpeech } from './speech.js'
 import { getLang, setLang, t } from './i18n.js'
 import { toCells, cellsToUnicode, cellsToDiagram, keyHintForCells } from './cells.js'
 import { dotsToUnicode, unicodeToDots } from './braille-engine.js'
-import { buildInputDisplayModel, buildDocumentDisplayModel } from './input-display.js'
+import { buildInputDisplayModel } from './input-display.js'
 
 export { createAppState }
 export function buildPages() { return [...TOP_LEVEL_PAGES] }
@@ -53,9 +53,33 @@ export function editorAtomsToText(atoms = []) {
   return (Array.isArray(atoms) ? atoms : []).map(atom => {
     if (Array.isArray(atom)) return cellsToUnicode(atom)
     if (atom === null) return ' '
-    if (atom && atom.kind === 'text') return atom.value || ''
-    return ''
+    return atom && atom.kind === 'text' ? atom.value || '' : ''
   }).join('')
+}
+
+export function editorCursorToOffset(atoms = [], cursor = 0) {
+  const safeAtoms = Array.isArray(atoms) ? atoms : []
+  const safeCursor = Math.max(0, Math.min(Number(cursor) || 0, safeAtoms.length))
+  return safeAtoms.slice(0, safeCursor)
+    .reduce((offset, atom) => offset + editorAtomsToText([atom]).length, 0)
+}
+
+export function editorOffsetToCursor(atoms = [], offset = 0) {
+  const safeAtoms = Array.isArray(atoms) ? atoms : []
+  const safeOffset = Math.max(0, Number(offset) || 0)
+  let consumed = 0
+  for (let index = 0; index < safeAtoms.length; index += 1) {
+    const length = editorAtomsToText([safeAtoms[index]]).length
+    if (safeOffset < consumed + length) return index
+    consumed += length
+    if (safeOffset === consumed) return index + 1
+  }
+  return safeAtoms.length
+}
+
+export function buildTextareaDocumentHtml(text = '', { id = 'note-textarea', rows = 10, label = '笔记内容', readOnly = false } = {}) {
+  const readonly = readOnly ? ' readonly' : ''
+  return `<textarea id="${id}" rows="${rows}" wrap="soft" aria-label="${label}"${readonly}>${esc(text)}</textarea>`
 }
 
 export function appendCommittedBraille(existing, cells) {
@@ -106,14 +130,6 @@ function inputDisplayHtml(confirmedCells, currentDots, cursorIndex, label = '当
   }).join('<span class="cell-separator" aria-hidden="true">；</span>')}</div>`
 }
 
-function documentDisplayHtml(documentCells, documentCursor, label = '已确认盲文', showCursor = true) {
-  const models = buildDocumentDisplayModel(documentCells, documentCursor, showCursor)
-  return `<div class="document-display" aria-label="${label}">${models.map(model => {
-    if (model.kind === 'document-cursor') return '<span class="document-caret" role="img" aria-label="文档光标位置"></span>'
-    if (model.kind === 'space') return '<span class="document-space" aria-label="空格">␠</span>'
-    return `<span class="document-unit">${model.cells.map(dots => `<span class="document-cell">${dots.map(on => `<i class="input-dot${on ? ' is-on' : ''}"></i>`).join('')}</span>`).join('<span class="document-cell-separator" aria-hidden="true">；</span>')}</span>`
-  }).join('')}</div>`
-}
 export function initApp() {
   applyTheme()
   let state = createAppState()
@@ -226,8 +242,7 @@ export function initApp() {
     const input = state.input
     const composition = input.compositionCells || input.confirmedCells
     const compositionCursor = input.compositionCursor ?? input.cursorIndex
-    const hasComposition = composition.length > 0 || input.currentDots.length > 0
-    return `<div class="tool-layout"><div class="tool-copy"><h2>在线输入</h2><p>用数字小键盘输入盲文。上方只显示当前多方，按 0 确认后进入下方文档。</p><div class="key-row"><kbd>7</kbd><kbd>4</kbd><kbd>1</kbd><kbd>8</kbd><kbd>5</kbd><kbd>2</kbd></div></div><div class="input-tool"><div class="input-section-label">当前多方输入</div>${inputDisplayHtml(composition, input.currentDots, compositionCursor, '当前多方输入')}<div class="input-section-label">已确认盲文文档</div>${documentDisplayHtml(input.documentCells || [], input.documentCursor || 0, '已确认盲文文档', !hasComposition)}<div class="input-output" aria-live="polite">${esc(inputOutput || '等待输入')}</div><p class="helper">按 * 确认当前方，按 0 确认整组；当前组为空时，按 / 或 * 移动下方光标</p></div></div>`
+    return `<div class="tool-layout"><div class="tool-copy"><h2>在线输入</h2><p>用数字小键盘输入盲文。上方只显示当前多方，按 0 确认后进入下方文档。</p><div class="key-row"><kbd>7</kbd><kbd>4</kbd><kbd>1</kbd><kbd>8</kbd><kbd>5</kbd><kbd>2</kbd></div></div><div class="input-tool"><div class="input-section-label">当前多方输入</div>${inputDisplayHtml(composition, input.currentDots, compositionCursor, '当前多方输入')}<div class="input-output" aria-live="polite">${esc(inputOutput || '等待输入')}</div><p class="helper">按 * 确认当前方，按 0 确认整组；当前组为空时，按 / 或 * 移动文档光标</p></div></div>`
   }
 
   function renderExperiment() {
@@ -253,8 +268,7 @@ export function initApp() {
     const input = state.input
     const composition = input.compositionCells || input.confirmedCells
     const compositionCursor = input.compositionCursor ?? input.cursorIndex
-    const hasComposition = composition.length > 0 || input.currentDots.length > 0
-    return `<div class="reader-panel"><h2>听书场景</h2><p>这里输入的是盲文。上方只显示当前多方；按 0 确认后，内容进入下方盲文文档。</p>${inputDisplayHtml(composition, input.currentDots, compositionCursor, '当前多方输入')}${documentDisplayHtml(input.documentCells || [], input.documentCursor || 0, '已确认盲文文档', !hasComposition)}<textarea id="reader-text" rows="4" aria-label="盲文内容" readonly>${esc(currentReaderText)}</textarea><label class="range-label">速度 <input id="reader-speed" type="range" min="0.5" max="5" step="0.5" value="${reader.getSpeed()}"><output>${reader.getSpeed()}x</output></label><div class="button-row"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-stop">停止</button></div><div id="reader-progress" aria-live="polite"></div></div>`
+    return `<div class="reader-panel"><h2>听书场景</h2><p>这里输入的是盲文。上方只显示当前多方；按 0 确认后，内容进入下方盲文文档。</p>${inputDisplayHtml(composition, input.currentDots, compositionCursor, '当前多方输入')}${buildTextareaDocumentHtml(currentReaderText, { id: 'reader-text', rows: 4, label: '盲文内容' })}<label class="range-label">速度 <input id="reader-speed" type="range" min="0.5" max="5" step="0.5" value="${reader.getSpeed()}"><output>${reader.getSpeed()}x</output></label><div class="button-row"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-stop">停止</button></div><div id="reader-progress" aria-live="polite"></div></div>`
   }
 
   function renderNotes() {
@@ -265,17 +279,32 @@ export function initApp() {
       const input = state.input
       const composition = input.compositionCells || input.confirmedCells
       const compositionCursor = input.compositionCursor ?? input.cursorIndex
-      const hasComposition = composition.length > 0 || input.currentDots.length > 0
       textarea.value = noteText
       textarea.textContent = noteText
       textarea.insertAdjacentHTML('beforebegin', inputDisplayHtml(composition, input.currentDots, compositionCursor, '当前多方输入'))
-      textarea.insertAdjacentHTML('beforebegin', documentDisplayHtml(input.documentCells || [], input.documentCursor || 0, '已确认盲文文档', !hasComposition))
     }
     return `<section class="page page-notes"><div class="page-heading"><div><p class="eyebrow">NOTES</p><h1>笔记</h1><p class="lead">用盲文记录，也可以分别用文字或 AudioBraille 回听。</p></div></div>${legacy.innerHTML}</section>`
   }
 
+  function restoreEditorSelection(name, preserveFocus = false) {
+    if (!name) return
+    const textarea = document.querySelector(name === 'notes' ? '#note-textarea' : '#reader-text')
+    const documentState = editorDocuments[name]
+    if (!textarea || !documentState) return
+    const text = editorAtomsToText(documentState.cells)
+    if (textarea.value !== text) textarea.value = text
+    const offset = editorCursorToOffset(documentState.cells, documentState.cursor)
+    if (preserveFocus) textarea.focus({ preventScroll: true })
+    textarea.setSelectionRange(offset, offset)
+  }
+
   function render() {
     if (!main) return
+    const editorNameBeforeRender = activeEditorName()
+    const editorElementBeforeRender = editorNameBeforeRender
+      ? document.querySelector(editorNameBeforeRender === 'notes' ? '#note-textarea' : '#reader-text')
+      : null
+    const preserveEditorFocus = editorElementBeforeRender && document.activeElement === editorElementBeforeRender
     const currentController = activeController()
     if (currentController) setInputSnapshot(currentController.snapshot())
     document.querySelectorAll('.main-nav [data-action]').forEach(button => {
@@ -287,6 +316,7 @@ export function initApp() {
     main.innerHTML = html
     if (state.page === 'notes') notes.updateReference?.()
     bindDynamicState()
+    restoreEditorSelection(editorNameBeforeRender, Boolean(preserveEditorFocus))
   }
 
   function bindDynamicState() {
@@ -299,13 +329,13 @@ export function initApp() {
     const noteArea = document.querySelector('#note-textarea')
     noteArea?.addEventListener('input', () => {
       noteText = noteArea.value
-      loadEditorText('notes', noteText)
+      loadEditorText('notes', noteText, noteArea.selectionStart)
       notes.updateReference?.()
     })
     const readerText = document.querySelector('#reader-text')
     readerText?.addEventListener('input', () => {
       currentReaderText = readerText.value
-      loadEditorText('reader', currentReaderText)
+      loadEditorText('reader', currentReaderText, readerText.selectionStart)
     })
     const importFile = document.querySelector('#note-import-file')
     importFile?.addEventListener('change', () => {
@@ -395,11 +425,13 @@ export function initApp() {
     reader: createEditorController('reader')
   }
 
-  function loadEditorText(name, text) {
+  function loadEditorText(name, text, offset = String(text).length) {
+    const controller = editorControllers[name]
+    if (!controller) return false
     const atoms = editorTextToAtoms(text)
-    editorControllers[name].setDocument(atoms, atoms.length)
+    controller.setDocument(atoms, editorOffsetToCursor(atoms, offset))
+    return true
   }
-
   function setInputSnapshot(snapshot) {
     const clone = atom => Array.isArray(atom)
       ? atom.map(cell => Array.isArray(cell) ? [...cell] : cell)

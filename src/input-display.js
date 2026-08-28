@@ -1,19 +1,4 @@
-// src/input-display.js —— 三个功能共用的六点输入可视化模型
-export function buildDocumentDisplayModel(documentCells = [], documentCursor = 0, showCursor = true) {
-  const cells = Array.isArray(documentCells) ? documentCells : []
-  const output = []
-  const cursor = { kind: 'document-cursor', cursor: true }
-  cells.forEach((unit, index) => {
-    if (showCursor && index === documentCursor) output.push(cursor)
-    if (unit === null) {
-      output.push({ kind: 'space', cursor: false, text: ' ' })
-    } else if (Array.isArray(unit)) {
-      output.push({ kind: 'document', cursor: false, cells: unit.map(dots => [1, 2, 3, 4, 5, 6].map(dot => Array.isArray(dots) && dots.includes(dot))) })
-    }
-  })
-  if (showCursor && documentCursor >= cells.length) output.push(cursor)
-  return output
-}
+// src/input-display.js —— 当前多方输入的六点可视化模型
 export function buildInputDisplayModel(confirmedCells = [], currentDots = [], cursorIndex = confirmedCells.length) {
   const toFlags = dots => [1, 2, 3, 4, 5, 6].map(dot => Array.isArray(dots) && dots.includes(dot))
   const cells = Array.isArray(confirmedCells) ? confirmedCells : []

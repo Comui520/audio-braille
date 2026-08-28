@@ -67,7 +67,7 @@ export function initNotes({ state, storage, render }) {
       const sec = document.createElement('section')
       sec.innerHTML = `
         <h1>${t('notesTitle')}</h1>
-        <textarea id="note-textarea" rows="10" aria-label="笔记内容"></textarea>
+        <textarea id="note-textarea" rows="10" wrap="soft" aria-label="笔记内容"></textarea>
         <div id="note-reference" aria-live="polite" class="note-reference"></div>
         <div class="note-actions">
           <button id="note-save" data-action="notes-save">${t('notesSave')}</button>

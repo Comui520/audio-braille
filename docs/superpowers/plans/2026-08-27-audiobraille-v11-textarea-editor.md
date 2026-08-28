@@ -32,7 +32,7 @@
 - 修改：`src/styles.css`。
 - 测试：`tests/input-controller.test.js`、`tests/input-display.test.js`、`tests/editor-textarea.test.js`、`tests/app-shell.test.js`。
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 在 `tests/editor-textarea.test.js` 新增纯函数测试，要求从 `src/app.js` 导出以下两个无 DOM 函数：
 
@@ -109,7 +109,7 @@ it('笔记文档视图只生成 textarea，不生成自定义文档方块', () =
 })
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：
 
@@ -119,7 +119,7 @@ npx vitest run tests/editor-textarea.test.js tests/input-controller.test.js test
 
 预期：新导出函数不存在，或现有应用壳仍包含 `.document-display`；失败原因必须来自目标行为缺失，而不是测试语法错误。
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 在 `src/input.js` 中保留两层结构并固定快照字段：
 
@@ -187,7 +187,7 @@ export function editorCursorToOffset(atoms = [], cursor = 0) {
 7. 全局小键盘处理不拦截 Enter，确保焦点在 textarea 时浏览器原生换行生效。
 8. `input-display.js` 只保留当前组合显示模型；文档方块测试和 DOM 渲染移除。
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：
 
@@ -197,7 +197,7 @@ npx vitest run tests/editor-textarea.test.js tests/input-controller.test.js test
 
 预期：全部通过；笔记/听书页面无 `.document-display`，文档单元不会出现在上方当前组合区。
 
-- [ ] **步骤 5：运行完整回归和构建**
+- [x] **步骤 5：运行完整回归和构建**
 
 运行：
 
@@ -208,7 +208,7 @@ npm run build
 
 预期：所有测试通过，Vite 构建成功。
 
-- [ ] **步骤 6：浏览器验证**
+- [x] **步骤 6：浏览器验证**
 
 使用 `http://127.0.0.1:4177/` 验证：
 
@@ -220,7 +220,7 @@ npm run build
 6. 在 textarea 直接按 Enter，换行符保留；长文本在 textarea 内自动换行并垂直滚动。
 7. 听书页遵循相同文档视图规则。
 
-- [ ] **步骤 7：Commit**
+- [x] **步骤 7：Commit**
 
 ```powershell
 git add src/app.js src/input.js src/input-display.js src/styles.css tests/input-controller.test.js tests/input-display.test.js tests/editor-textarea.test.js tests/app-shell.test.js
