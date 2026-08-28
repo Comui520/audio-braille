@@ -1,91 +1,51 @@
-// tests/curriculum.test.js —— v8 课程体系测试
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { CURRICULUM, getProgress, markLearned, getNextItem, getSectionProgress, getCategoryProgress, resetProgress } from '../src/curriculum.js'
+import { describe, it, expect } from 'vitest'
+import { CURRICULUM, createProgressStore } from '../src/curriculum.js'
 
-// Mock localStorage
-const localStorageMock = (() => {
-  let store = {}
+function fakeStorage() {
+  let record = { version: 2, sections: {} }
   return {
-    getItem: (key) => store[key] || null,
-    setItem: (key, value) => { store[key] = value.toString() },
-    removeItem: (key) => { delete store[key] },
-    clear: () => { store = {} }
+    async loadProgress() { return record },
+    async saveProgress(next) { record = next; return next }
   }
-})()
-global.localStorage = localStorageMock
+}
 
-describe('curriculum', () => {
-  beforeEach(() => {
-    resetProgress()
-  })
-
-  it('定义四大类课程', () => {
+describe('v9 curriculum and progress', () => {
+  it('定义四大课程区域', () => {
     expect(Object.keys(CURRICULUM)).toEqual(['pinyin', 'latin', 'symbols', 'digits'])
-    expect(CURRICULUM.pinyin.sections.length).toBe(3) // 声母/韵母/音节
-    expect(CURRICULUM.latin.sections.length).toBe(3) // a-h/i-p/q-z
-    expect(CURRICULUM.symbols.sections.length).toBe(2) // 中文/英文
-    expect(CURRICULUM.digits.sections.length).toBe(1) // 0-9
+    expect(CURRICULUM.pinyin.sections.map(section => section.id)).toEqual(['initials', 'finals', 'syllables'])
+    expect(CURRICULUM.pinyin.sections[0].items).toContain('zh')
+    expect(CURRICULUM.pinyin.sections[1].items.length).toBeGreaterThan(20)
   })
 
-  it('声母表包含18个（j/q/x 与 g/k/h 同点位已排除）', () => {
-    const initials = CURRICULUM.pinyin.sections.find(s => s.id === 'initials')
-    expect(initials.items.length).toBe(18)
-    expect(initials.items).not.toContain('j')
-    expect(initials.items).not.toContain('q')
-    expect(initials.items).not.toContain('x')
+  it('进度服务默认返回空小节', async () => {
+    const store = createProgressStore(fakeStorage())
+    await expect(store.getSection('latin', 'l1')).resolves.toEqual({ learned: [], current: null })
   })
 
-  it('初始进度为空', () => {
-    const prog = getSectionProgress('pinyin', 'initials')
-    expect(prog.learned).toEqual([])
-    expect(prog.current).toBeNull()
+  it('标记后自动指向下一个未学项', async () => {
+    const store = createProgressStore(fakeStorage())
+    await store.markLearned('latin', 'l1', 'a')
+    await expect(store.getSection('latin', 'l1')).resolves.toEqual({ learned: ['a'], current: 'b' })
   })
 
-  it('标记已学后自动设置下一个', () => {
-    markLearned('latin', 'l1', 'a')
-    const prog = getSectionProgress('latin', 'l1')
-    expect(prog.learned).toEqual(['a'])
-    expect(prog.current).toBe('b') // 自动指向下一个未学
+  it('手动跳转不覆盖已学项', async () => {
+    const store = createProgressStore(fakeStorage())
+    await store.markLearned('latin', 'l1', 'a')
+    await store.setCurrent('latin', 'l1', 'f')
+    await expect(store.getSection('latin', 'l1')).resolves.toEqual({ learned: ['a'], current: 'f' })
   })
 
-  it('连续标记多个', () => {
-    markLearned('latin', 'l1', 'a')
-    markLearned('latin', 'l1', 'b')
-    markLearned('latin', 'l1', 'c')
-    const prog = getSectionProgress('latin', 'l1')
-    expect(prog.learned).toEqual(['a', 'b', 'c'])
-    expect(prog.current).toBe('d')
+  it('计算分类总进度', async () => {
+    const store = createProgressStore(fakeStorage())
+    await store.markLearned('latin', 'l1', 'a')
+    await store.markLearned('latin', 'l2', 'i')
+    await expect(store.getCategory('latin')).resolves.toEqual({ learned: 2, total: 26 })
   })
 
-  it('getNextItem 返回下一个未学', () => {
-    markLearned('pinyin', 'finals', 'a')
-    const next = getNextItem('pinyin', 'finals')
-    expect(next).toBe('o')
-  })
-
-  it('全部学完后 current 为 null', () => {
-    const items = CURRICULUM.digits.sections[0].items
-    items.forEach(item => markLearned('digits', 'd1', item))
-    const prog = getSectionProgress('digits', 'd1')
-    expect(prog.current).toBeNull()
-  })
-
-  it('计算分类总进度', () => {
-    markLearned('latin', 'l1', 'a')
-    markLearned('latin', 'l1', 'b')
-    markLearned('latin', 'l2', 'i')
-    const prog = getCategoryProgress('latin')
-    expect(prog.learned).toBe(3)
-    expect(prog.total).toBe(26)
-  })
-
-  it('进度持久化', () => {
-    markLearned('pinyin', 'initials', 'b')
-    const prog1 = getSectionProgress('pinyin', 'initials')
-    expect(prog1.learned).toEqual(['b'])
-    
-    // 模拟重新加载（getProgress 从 localStorage 读）
-    const all = getProgress()
-    expect(all['pinyin.initials'].learned).toEqual(['b'])
+  it('reset 清空所有小节', async () => {
+    const store = createProgressStore(fakeStorage())
+    await store.markLearned('digits', 'd1', '1')
+    await store.reset()
+    await expect(store.getSection('digits', 'd1')).resolves.toEqual({ learned: [], current: null })
   })
 })

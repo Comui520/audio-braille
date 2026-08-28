@@ -1,5 +1,5 @@
 // src/curriculum.js —— v9：纯课程数据与进度服务
-import { LATIN_LETTERS } from './braille-engine.js'
+import { LATIN_LETTERS, INITIALS as INITIAL_TABLE, FINALS } from './braille-engine.js'
 import { SYMBOLS_CN, SYMBOLS_EN } from './data/symbols.js'
 
 const PINYIN_SYLLABLES = [
@@ -15,14 +15,14 @@ const PINYIN_SYLLABLES = [
   'hi1', 'hi2', 'hi3', 'hi4', 'hi', 'hu1', 'hu2', 'hu3', 'hu4', 'hu'
 ]
 
-const INITIALS = ['b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h', 'j', 'q', 'x', 'zh', 'ch', 'sh', 'r', 'z', 'c', 's']
+const INITIALS = Object.keys(INITIAL_TABLE).filter(item => !['j', 'q', 'x'].includes(item))
 
 export const CURRICULUM = {
   pinyin: {
     id: 'pinyin', label_zh: '中文拼音', label_en: 'Chinese Pinyin', icon: '拼',
     sections: [
       { id: 'initials', label_zh: '声母', label_en: 'Initials', type: 'initial', items: INITIALS },
-      { id: 'finals', label_zh: '韵母', label_en: 'Finals', type: 'final', items: ['a', 'o', 'e', 'i', 'u', 'ü', 'ai', 'ei', 'ao', 'ou', 'an', 'en', 'ang', 'eng'] },
+      { id: 'finals', label_zh: '韵母', label_en: 'Finals', type: 'final', items: Object.keys(FINALS) },
       { id: 'syllables', label_zh: '音节练习', label_en: 'Syllables', type: 'syllable', items: PINYIN_SYLLABLES }
     ]
   },

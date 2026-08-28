@@ -47,6 +47,16 @@ export function buildPinyinReference(dotsSeq) {
   return dotsSeqToPinyin(dotsSeq)
 }
 
+// v9 笔记播放标签，明确区分两种完全不同的播放方式
+export function getNotePlaybackLabel(mode, lang = 'zh') {
+  if (lang === 'en') return mode === 'tts' ? 'Read text (TTS)' : 'Play AudioBraille'
+  return mode === 'tts' ? '文字朗读（TTS）' : 'AudioBraille 回放'
+}
+
+export function buildNotePlaybackCells(text) {
+  return extractDotsFromText(text).map(dots => [...dots])
+}
+
 // —— 笔记 UI（由 app.js 调用）——
 // textarea + 快捷键：Ctrl+S 保存、Ctrl+O 历史、Ctrl+N 新建
 // 回放：+ 键朗读明文 + playAudioBraille 逐方演奏（每方间隔 0.3s）
@@ -60,11 +70,12 @@ export function initNotes({ state, storage, render }) {
         <textarea id="note-textarea" rows="10" aria-label="笔记内容"></textarea>
         <div id="note-reference" aria-live="polite" class="note-reference"></div>
         <div class="note-actions">
-          <button id="note-save">${t('notesSave')}</button>
-          <button id="note-play">${t('notesPlay')}</button>
-          <button id="note-export">${t('notesExport')}</button>
-          <button id="note-import">${t('notesImport')}</button>
-          <button id="note-new">${t('notesNew')}</button>
+          <button id="note-save" data-action="notes-save">${t('notesSave')}</button>
+          <button id="note-play" data-action="notes-play-audio">AudioBraille 回放</button>
+          <button id="note-read-text" data-action="notes-play-text">文字朗读（TTS）</button>
+          <button id="note-export" data-action="notes-export">${t('notesExport')}</button>
+          <button id="note-import" data-action="notes-import">${t('notesImport')}</button>
+          <button id="note-new" data-action="notes-new">${t('notesNew')}</button>
         </div>
         <input type="file" id="note-import-file" accept=".json,.brf" hidden>
       `
@@ -170,22 +181,23 @@ export function initNotes({ state, storage, render }) {
       speak(t('notesImported'))
     },
     async playback() {
-      // v7：回放 = AudioBraille 逐方播放（如听书），不是 TTS 读明文
-      const dotsSeq = extractDotsFromText(current.plain)
+      // AudioBraille 逐方播放当前编辑区，不依赖上一次 save 的 current.plain
+      const text = document.querySelector('#note-textarea')?.value ?? current.plain
+      const dotsSeq = buildNotePlaybackCells(text)
       if (dotsSeq.length === 0) { speak(t('notesEmpty')); return }
       const { playAudioBraille } = await import('./audio-braille.js')
-      speak(t('notesPlayStart'))
       for (const dots of buildPlaybackSequence(dotsSeq)) {
         await playAudioBraille(dots, { duration: 0.2 })
-        await new Promise(r => setTimeout(r, 300))   // 方间 0.3s
+        await new Promise(r => setTimeout(r, 300))
       }
     },
     // 双模式朗读（v5）：mode = 'tts'（盲文转文字 TTS）| 'braille'（AudioBraille 直接读）
     // speed: 0.5~5x（AudioBraille 模式有效）
     async readAloud(mode = 'tts', speed = 1) {
-      const dotsSeq = extractDotsFromText(current.plain)
+      const sourceText = document.querySelector('#note-textarea')?.value ?? current.plain
+      const dotsSeq = extractDotsFromText(sourceText)
       if (mode === 'tts') {
-        const text = plainToSpeech(current.plain)
+        const text = plainToSpeech(sourceText)
         speak(text || t('notesEmpty'))
         return
       }
