@@ -1,6 +1,6 @@
 // tests/braille-pinyin.test.js
 import { describe, it, expect } from 'vitest'
-import { dotsSeqToPinyin, applyToneMark } from '../src/braille-engine.js'
+import { dotsSeqToPinyin, applyToneMark, formatPinyinReference } from '../src/braille-engine.js'
 
 describe('声调符号标注（applyToneMark）', () => {
   it('a + 各声调', () => {
@@ -23,6 +23,34 @@ describe('声调符号标注（applyToneMark）', () => {
   })
 })
 
+describe('拼音对照显示格式化', () => {
+  it('完整 ma1 继续显示带调拼音', () => {
+    expect(formatPinyinReference([[1, 3, 4], [3, 5], [1]])).toBe('mā')
+  })
+
+  it('完整无调 ma 显示无调拼音', () => {
+    expect(formatPinyinReference([[1, 3, 4], [3, 5]])).toBe('ma')
+  })
+
+  it('完整零声母 i1 保留现有 yī 规则', () => {
+    expect(formatPinyinReference([[2, 4], [1]])).toBe('yī')
+  })
+
+  it('单独声母显示声母本身', () => {
+    expect(formatPinyinReference([[1, 3, 4]])).toBe('m')
+  })
+
+  it('单独声调显示正式名称', () => {
+    expect(formatPinyinReference([[1]])).toBe('（阴平）')
+    expect(formatPinyinReference([[2]])).toBe('（阳平）')
+    expect(formatPinyinReference([[3]])).toBe('（上声）')
+    expect(formatPinyinReference([[2, 3]])).toBe('（去声）')
+  })
+
+  it('未知方仍显示占位符', () => {
+    expect(formatPinyinReference([[5]])).toBe('·')
+  })
+})
 describe('盲文方序列 → 拼音（v6 明文对照）', () => {
   it('ma1（声母m+韵母a+阴平）→ mā', () => {
     expect(dotsSeqToPinyin([[1, 3, 4], [3, 5], [1]])).toBe('mā')

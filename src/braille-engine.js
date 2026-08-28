@@ -203,6 +203,7 @@ const TONE_MARKED = {
   '3': { a: 'ǎ', e: 'ě', i: 'ǐ', o: 'ǒ', u: 'ǔ', ü: 'ǚ' },
   '4': { a: 'à', e: 'è', i: 'ì', o: 'ò', u: 'ù', ü: 'ǜ' }
 }
+export const TONE_NAMES = { '1': '阴平', '2': '阳平', '3': '上声', '4': '去声' }
 // 零声母书写：i→yi, u→wu, ü→yu
 const ZERO_INITIAL_SPELLING = { i: 'yi', u: 'wu', ü: 'yu' }
 
@@ -254,6 +255,55 @@ export function dotsSeqToPinyin(dotsSequence) {
       out.push('·')
       i += 1
     }
+  }
+  return out.join('')
+}
+
+export function formatPinyinReference(dotsSequence) {
+  if (!Array.isArray(dotsSequence) || dotsSequence.length === 0) return ''
+  const out = []
+  let i = 0
+  while (i < dotsSequence.length) {
+    const current = Array.isArray(dotsSequence[i]) ? dotsToComponent(dotsSequence[i]) : null
+    const next = Array.isArray(dotsSequence[i + 1]) ? dotsToComponent(dotsSequence[i + 1]) : null
+
+    if (current?.type === 'initial' && next?.type === 'final') {
+      const following = Array.isArray(dotsSequence[i + 2]) ? dotsToComponent(dotsSequence[i + 2]) : null
+      const tone = following?.type === 'tone' ? following.value : null
+      const { initial } = applyVariation(current.value, next.value)
+      out.push(initial + applyToneMark(next.value, tone))
+      i += tone ? 3 : 2
+      continue
+    }
+
+    if (current?.type === 'final') {
+      const tone = next?.type === 'tone' ? next.value : null
+      const base = ZERO_INITIAL_SPELLING[current.value] || current.value
+      out.push(applyToneMark(base, tone))
+      i += tone ? 2 : 1
+      continue
+    }
+
+    if (current?.type === 'initial' && next?.type === 'tone') {
+      out.push(`${current.value}（${TONE_NAMES[next.value]}）`)
+      i += 2
+      continue
+    }
+
+    if (current?.type === 'initial') {
+      out.push(current.value)
+      i += 1
+      continue
+    }
+
+    if (current?.type === 'tone') {
+      out.push(`（${TONE_NAMES[current.value]}）`)
+      i += 1
+      continue
+    }
+
+    out.push('·')
+    i += 1
   }
   return out.join('')
 }

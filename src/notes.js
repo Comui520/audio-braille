@@ -1,7 +1,7 @@
 // src/notes.js —— v5：笔记记录器（明文对照 + 双模式朗读）
 // 明文对照：输入盲文的同时，在下方显示对应的拉丁字母/拼音（方便不懂盲文的人验证）
 // 双模式朗读：①盲文转文字 → TTS 读 ②直接 AudioBraille 逐方播放，速度可调
-import { dotsToUnicode, unicodeToDots, dotsToLatin, dotsSeqToPinyin } from './braille-engine.js'
+import { dotsToUnicode, unicodeToDots, dotsToLatin, formatPinyinReference } from './braille-engine.js'
 import { speak } from './speech.js'
 import { t, getLang } from './i18n.js'
 
@@ -44,7 +44,7 @@ export function buildPlainReference(dotsSeq) {
 // 例：⠍⠔⠁ → "mā"；无法解析的方用 · 占位
 export function buildPinyinReference(dotsSeq) {
   if (!dotsSeq.length) return ''
-  return dotsSeqToPinyin(dotsSeq)
+  return formatPinyinReference(dotsSeq)
 }
 
 // v9 笔记播放标签，明确区分两种完全不同的播放方式

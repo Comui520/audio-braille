@@ -25,7 +25,7 @@
 - 修改：`src/braille-engine.js`，放在 `dotsSeqToPinyin()` 附近。
 - 测试：`tests/braille-pinyin.test.js`。
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 在 `tests/braille-pinyin.test.js` 中引入 `formatPinyinReference`，增加以下测试：
 
@@ -62,7 +62,7 @@ it('笔记中文对照对不完整拼音显示已识别结构', () => {
 })
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：
 
@@ -72,7 +72,7 @@ npx vitest run tests/braille-pinyin.test.js tests/notes-v9.test.js
 
 预期：FAIL，报错 `formatPinyinReference is not a function` 或导入符号不存在。
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 在 `src/braille-engine.js` 中增加：
 
@@ -121,7 +121,7 @@ export function buildPinyinReference(dotsSeq) {
 }
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：
 
@@ -131,7 +131,7 @@ npx vitest run tests/braille-pinyin.test.js tests/notes-v9.test.js
 
 预期：相关测试全部 PASS；原有 `dotsSeqToPinyin()` 测试仍然全部 PASS。
 
-- [ ] **步骤 5：运行构建验证**
+- [x] **步骤 5：运行构建验证**
 
 运行：
 
@@ -141,7 +141,7 @@ npm run build
 
 预期：Vite 构建成功，无模块导入错误。
 
-- [ ] **步骤 6：Commit**
+- [x] **步骤 6：Commit**
 
 ```powershell
 git add src/braille-engine.js src/notes.js tests/braille-pinyin.test.js tests/notes-v9.test.js
