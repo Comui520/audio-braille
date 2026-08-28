@@ -1,19 +1,7 @@
 // src/curriculum.js —— v9：纯课程数据与进度服务
 import { LATIN_LETTERS, INITIALS as INITIAL_TABLE, FINALS } from './braille-engine.js'
 import { SYMBOLS_CN, SYMBOLS_EN } from './data/symbols.js'
-
-const PINYIN_SYLLABLES = [
-  'ba1', 'ba2', 'ba3', 'ba4', 'ba', 'bo1', 'bo2', 'bo3', 'bo4', 'bo',
-  'bi1', 'bi2', 'bi3', 'bi4', 'bi', 'bu1', 'bu2', 'bu3', 'bu4', 'bu',
-  'ma1', 'ma2', 'ma3', 'ma4', 'ma', 'mo1', 'mo2', 'mo3', 'mo4', 'mo',
-  'mi1', 'mi2', 'mi3', 'mi4', 'mi', 'mu1', 'mu2', 'mu3', 'mu4', 'mu',
-  'da1', 'da2', 'da3', 'da4', 'da', 'de1', 'de2', 'de3', 'de4', 'de',
-  'di1', 'di2', 'di3', 'di4', 'di', 'du1', 'du2', 'du3', 'du4', 'du',
-  'la1', 'la2', 'la3', 'la4', 'la', 'li1', 'li2', 'li3', 'li4', 'li',
-  'le1', 'le2', 'le3', 'le4', 'le', 'lu1', 'lu2', 'lu3', 'lu4', 'lu',
-  'ha1', 'ha2', 'ha3', 'ha4', 'ha', 'he1', 'he2', 'he3', 'he4', 'he',
-  'hi1', 'hi2', 'hi3', 'hi4', 'hi', 'hu1', 'hu2', 'hu3', 'hu4', 'hu'
-]
+import { PINYIN_SYLLABLES } from './data/pinyin-syllables.js'
 
 const INITIALS = Object.keys(INITIAL_TABLE).filter(item => !['j', 'q', 'x'].includes(item))
 
@@ -63,6 +51,11 @@ function emptyProgress() {
   return { version: 2, sections: {} }
 }
 
+function normalizeItemId(categoryId, sectionId, item) {
+  if (categoryId === 'pinyin' && sectionId === 'syllables') return String(item || '').replace(/[1-4]$/, '')
+  return item
+}
+
 function normalizeProgress(raw) {
   const source = raw && typeof raw === 'object' ? raw : {}
   return {
@@ -73,10 +66,11 @@ function normalizeProgress(raw) {
   }
 }
 
-function normalizeSection(raw) {
+function normalizeSection(raw, categoryId = null, sectionId = null) {
+  const learned = Array.isArray(raw?.learned) ? raw.learned.map(item => normalizeItemId(categoryId, sectionId, item)) : []
   return {
-    learned: Array.isArray(raw?.learned) ? [...new Set(raw.learned)] : [],
-    current: raw?.current ?? null
+    learned: [...new Set(learned)],
+    current: raw?.current ? normalizeItemId(categoryId, sectionId, raw.current) : null
   }
 }
 
@@ -96,16 +90,17 @@ export function createProgressStore(storage) {
   return {
     async getSection(categoryId, sectionId) {
       const progress = await read()
-      return normalizeSection(progress.sections[getProgressKey(categoryId, sectionId)])
+      return normalizeSection(progress.sections[getProgressKey(categoryId, sectionId)], categoryId, sectionId)
     },
 
     async markLearned(categoryId, sectionId, item) {
       const section = getSectionData(categoryId, sectionId)
-      if (!section || !section.items.includes(item)) return this.getSection(categoryId, sectionId)
+      const itemId = normalizeItemId(categoryId, sectionId, item)
+      if (!section || !section.items.includes(itemId)) return this.getSection(categoryId, sectionId)
       const progress = await read()
       const key = getProgressKey(categoryId, sectionId)
-      const saved = normalizeSection(progress.sections[key])
-      if (!saved.learned.includes(item)) saved.learned.push(item)
+      const saved = normalizeSection(progress.sections[key], categoryId, sectionId)
+      if (!saved.learned.includes(itemId)) saved.learned.push(itemId)
       saved.current = section.items.find(candidate => !saved.learned.includes(candidate)) || null
       progress.sections[key] = saved
       await write(progress)
@@ -114,11 +109,12 @@ export function createProgressStore(storage) {
 
     async setCurrent(categoryId, sectionId, item) {
       const section = getSectionData(categoryId, sectionId)
-      if (!section || (item !== null && !section.items.includes(item))) return this.getSection(categoryId, sectionId)
+      const itemId = item === null ? null : normalizeItemId(categoryId, sectionId, item)
+      if (!section || (itemId !== null && !section.items.includes(itemId))) return this.getSection(categoryId, sectionId)
       const progress = await read()
       const key = getProgressKey(categoryId, sectionId)
-      const saved = normalizeSection(progress.sections[key])
-      saved.current = item
+      const saved = normalizeSection(progress.sections[key], categoryId, sectionId)
+      saved.current = itemId
       progress.sections[key] = saved
       await write(progress)
       return saved

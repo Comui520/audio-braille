@@ -5,7 +5,6 @@ import { createAppState, TOP_LEVEL_PAGES } from './app-state.js'
 import { createInputController, keyToPoint } from './input.js'
 import { createProgressStore } from './curriculum.js'
 import { getTeachingCategories, getTeachingSections, getTeachingItems, getTeachingItem, markTeachingLearned, buildItemSpeech } from './teaching.js'
-import { buildTeachingSpeech } from './teaching-speech.js'
 import { createExperimentModel, buildShowcase, buildShowcaseInstruction } from './experiment.js'
 import { createReader, SAMPLE_BRAILLE } from './reader.js'
 import { initNotes } from './notes.js'
@@ -80,6 +79,15 @@ export function editorOffsetToCursor(atoms = [], offset = 0) {
 export function buildTextareaDocumentHtml(text = '', { id = 'note-textarea', rows = 10, label = '笔记内容', readOnly = false } = {}) {
   const readonly = readOnly ? ' readonly' : ''
   return `<textarea id="${id}" rows="${rows}" wrap="soft" aria-label="${label}"${readonly}>${esc(text)}</textarea>`
+}
+
+export function buildTonePickerHtml(selected = null) {
+  const tones = [[null, '无调'], ['1', '阴平'], ['2', '阳平'], ['3', '上声'], ['4', '去声']]
+  return `<div class="tone-picker" role="group" aria-label="选择声调">${tones.map(([tone, label]) => `<button class="tone-option${selected === tone ? ' is-active' : ''}" data-action="teaching-tone" data-tone="${tone ?? ''}">${label}</button>`).join('')}</div>`
+}
+
+export function buildLearningPlayback(item) {
+  return { cells: item?.cells || [], speech: null }
 }
 
 export function appendCommittedBraille(existing, cells) {
@@ -175,7 +183,12 @@ export function initApp() {
   }).catch(() => render())
 
   function sectionProgress(category, section) {
-    return progressCache[`${category}.${section}`] || { learned: [], current: null }
+    const raw = progressCache[`${category}.${section}`] || { learned: [], current: null }
+    if (category !== 'pinyin' || section !== 'syllables') return raw
+    return {
+      learned: [...new Set((raw.learned || []).map(item => String(item).replace(/[1-4]$/, '')))],
+      current: raw.current ? String(raw.current).replace(/[1-4]$/, '') : null
+    }
   }
 
   function saveSectionProgress(category, section, value) {
@@ -230,7 +243,7 @@ export function initApp() {
 
   function renderTeachingItem() {
     const teaching = state.teaching
-    const item = getTeachingItem(teaching.category, teaching.section, teaching.item, getLang())
+    const item = getTeachingItem(teaching.category, teaching.section, teaching.item, getLang(), teaching.tone)
     if (!item) return `<div class="empty-state">找不到这个学习项目<button class="button" data-action="teaching-back-section">返回</button></div>`
     const section = getTeachingSections(teaching.category, getLang()).find(value => value.id === teaching.section)
     const items = section?.items || []
@@ -239,7 +252,7 @@ export function initApp() {
     return `<div class="subhead"><button class="button button-quiet" data-action="teaching-back-section">← ${esc(section?.label || '列表')}</button><span class="item-position">${index + 1} / ${items.length}</span></div>
       <div class="lesson-layout">
         <div class="lesson-summary"><p class="eyebrow">${esc(item.type)}</p><h2>${esc(item.label)}</h2><p class="lesson-note">${item.type === 'initial' ? '声母' : item.type === 'final' ? '韵母' : item.type === 'syllable' ? `音节${item.toneName ? ` · ${item.toneName}` : ''}` : ''}</p></div>
-        <div class="lesson-braille"><div class="lesson-unicode">${esc(item.unicode)}</div>${diagramHtml(item.cells)}<p>点位：${esc(pointsText(item.cells))}</p><p>键位：<strong>${esc(keyHintForCells(item.cells))}</strong></p></div>
+        <div class="lesson-braille"><div class="lesson-unicode">${esc(item.unicode)}</div>${diagramHtml(item.cells)}<p>点位：${esc(pointsText(item.cells))}</p><p>键位：<strong>${esc(keyHintForCells(item.cells))}</strong></p>${item.type === 'syllable' ? `<div class="syllable-tone-picker">${buildTonePickerHtml(teaching.tone)}<p class="tone-status">${item.toneName || '无调'} · ${item.cells.length}方${teaching.tone && item.cells.length < 3 ? ' · 按国家通用盲文规则省写' : ''}</p></div>` : ''}</div>
         <div class="lesson-actions"><button class="button button-primary" data-action="play-item">播放 AudioBraille</button><button class="button button-success" data-action="mark-learned">标记为已学</button></div>
       </div>
       <div class="phase-tabs"><button class="tab${teaching.phase === 'learn' ? ' is-active' : ''}" data-action="teaching-phase" data-phase="learn">学</button><button class="tab${teaching.phase === 'practice' ? ' is-active' : ''}" data-action="teaching-phase" data-phase="practice">练</button><button class="tab${teaching.phase === 'exam' ? ' is-active' : ''}" data-action="teaching-phase" data-phase="exam">考</button></div>
@@ -363,7 +376,7 @@ export function initApp() {
   }
 
   async function commitLearning(cells) {
-    const item = getTeachingItem(state.teaching.category, state.teaching.section, state.teaching.item, getLang())
+    const item = getTeachingItem(state.teaching.category, state.teaching.section, state.teaching.item, getLang(), state.teaching.tone)
     if (!item) return
     const correct = JSON.stringify(cells.map(cell => [...cell].sort((a, b) => a - b))) === JSON.stringify(item.cells.map(cell => [...cell].sort((a, b) => a - b)))
     if (correct) speak('正确')
@@ -507,20 +520,23 @@ export function initApp() {
     else if (action === 'speak-guide') speak('小键盘七、四、一对应盲文点一、二、三；八、五、二对应点四、五、六。零提交，星号下一方，斜杠上一方，三退格，减号清空，加号朗读，句号空格。')
     else if (action === 'learning-tab') state = { ...state, learningTab: target.dataset.tab }
     else if (action === 'experiment-tab') { experimentToken++; reader.stop(); cancelSpeech(); state = { ...state, experimentTab: target.dataset.tab } }
-    else if (action === 'teaching-home') state = { ...state, teaching: { ...state.teaching, category: null, section: null, item: null } }
-    else if (action === 'teaching-category') state = { ...state, teaching: { ...state.teaching, category: target.dataset.category, section: null, item: null } }
+    else if (action === 'teaching-home') state = { ...state, teaching: { ...state.teaching, category: null, section: null, item: null, tone: null } }
+    else if (action === 'teaching-category') state = { ...state, teaching: { ...state.teaching, category: target.dataset.category, section: null, item: null, tone: null } }
     else if (action === 'teaching-continue') {
       const section = target.dataset.section
       const p = sectionProgress(state.teaching.category, section)
-      state = { ...state, teaching: { ...state.teaching, section, item: p.current || getTeachingSections(state.teaching.category).find(value => value.id === section).items[0], phase: 'learn' } }
-    } else if (action === 'teaching-item') state = { ...state, teaching: { ...state.teaching, section: target.dataset.section, item: decodeURIComponent(target.dataset.item), phase: 'learn' }, input: { confirmedCells: [], currentDots: [] } }
+      state = { ...state, teaching: { ...state.teaching, section, item: p.current || getTeachingSections(state.teaching.category).find(value => value.id === section).items[0], phase: 'learn', tone: null } }
+    } else if (action === 'teaching-tone') {
+      const tone = target.dataset.tone || null
+      state = { ...state, teaching: { ...state.teaching, tone }, input: { confirmedCells: [], currentDots: [], cursorIndex: 0 } }
+    } else if (action === 'teaching-item') state = { ...state, teaching: { ...state.teaching, section: target.dataset.section, item: decodeURIComponent(target.dataset.item), phase: 'learn', tone: null }, input: { confirmedCells: [], currentDots: [] } }
     else if (action === 'teaching-back-section') state = { ...state, teaching: { ...state.teaching, section: null, item: null }, input: { confirmedCells: [], currentDots: [] } }
     else if (action === 'teaching-phase') state = { ...state, teaching: { ...state.teaching, phase: target.dataset.phase }, input: { confirmedCells: [], currentDots: [] } }
     else if (action === 'teaching-prev' || action === 'teaching-next') {
       const section = getTeachingSections(state.teaching.category).find(value => value.id === state.teaching.section)
       const index = section.items.indexOf(state.teaching.item) + (action === 'teaching-prev' ? -1 : 1)
-      if (section.items[index]) state = { ...state, teaching: { ...state.teaching, item: section.items[index] }, input: { confirmedCells: [], currentDots: [] } }
-    } else if (action === 'play-item') { const item = getTeachingItem(state.teaching.category, state.teaching.section, state.teaching.item, getLang()); if (item) { speak(buildTeachingSpeech(item, getLang())); void playCells(item.cells) } }
+      if (section.items[index]) state = { ...state, teaching: { ...state.teaching, item: section.items[index], tone: null }, input: { confirmedCells: [], currentDots: [] } }
+    } else if (action === 'play-item') { const item = getTeachingItem(state.teaching.category, state.teaching.section, state.teaching.item, getLang(), state.teaching.tone); if (item) { cancelSpeech(); const playback = buildLearningPlayback(item); void playCells(playback.cells) } }
     else if (action === 'mark-learned') {
       const section = getTeachingSections(state.teaching.category).find(value => value.id === state.teaching.section)
       const old = sectionProgress(state.teaching.category, state.teaching.section)
@@ -595,7 +611,7 @@ export function initApp() {
       if (trial) void playCells(trial.cells)
       return
     }
-    if (event.key === '+' && state.page === 'learning' && state.teaching.item) { const item = getTeachingItem(state.teaching.category, state.teaching.section, state.teaching.item); if (item) void playCells(item.cells) }
+    if (event.key === '+' && state.page === 'learning' && state.teaching.item) { const item = getTeachingItem(state.teaching.category, state.teaching.section, state.teaching.item, getLang(), state.teaching.tone); if (item) void playCells(item.cells) }
     if (event.key === '+' && state.page === 'notes') void notes.readAloud('braille')
     controller.handleKey(event.key)
     setInputSnapshot(controller.snapshot())

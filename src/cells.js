@@ -33,12 +33,12 @@ export function gradeCells(expected, given) {
   return e.every((cell, i) => key(cell) === key(g[i]))
 }
 
-// 分方键位提示：方内键位用空格分隔（避免 TTS 把 1852 读成"一千八百五十二"），方间用「；」
+// 分方键位提示：方内键位用空格分隔；方间用 * 对应确认下一方
 export function keyHintForCells(dots) {
   return toCells(dots)
     .map(cell => cell.map(d => KEY_FOR_DOT[d]).filter(Boolean).join(' '))
     .filter(Boolean)
-    .join('；')
+    .join('*')
 }
 
 // 盲文明文（Unicode 方）

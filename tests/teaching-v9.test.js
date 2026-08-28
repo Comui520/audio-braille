@@ -8,7 +8,7 @@ import {
   buildItemSpeech
 } from '../src/teaching.js'
 
-describe('v9 教学层级', () => {
+describe('v12 教学层级', () => {
   it('只有四个平级大区域', () => {
     expect(getTeachingCategories().map(item => item.id))
       .toEqual(['pinyin', 'latin', 'symbols', 'digits'])
@@ -29,6 +29,20 @@ describe('v9 教学层级', () => {
   it('多方项目保留声韵调或数字符号边界', () => {
     expect(getTeachingItem('pinyin', 'syllables', 'ma1').cells).toEqual([[1, 3, 4], [3, 5], [1]])
     expect(getTeachingItem('digits', 'd1', '2').cells).toEqual([[3, 4, 5, 6], [1, 2]])
+  })
+
+  it('基础音节默认无调，单项声调可以覆盖', () => {
+    expect(getTeachingItem('pinyin', 'syllables', 'ba').cells)
+      .toEqual([[1, 2], [3, 5]])
+    expect(getTeachingItem('pinyin', 'syllables', 'ba', 'zh', '1'))
+      .toEqual(expect.objectContaining({ tone: '1', toneName: '阴平', cells: [[1, 2], [3, 5], [1]] }))
+  })
+
+  it('复杂韵母和零声母别名可以生成盲文', () => {
+    expect(getTeachingItem('pinyin', 'syllables', 'bing').cells).toHaveLength(2)
+    expect(getTeachingItem('pinyin', 'syllables', 'guang').cells).toHaveLength(2)
+    expect(getTeachingItem('pinyin', 'syllables', 'yuan').cells).toHaveLength(1)
+    expect(getTeachingItem('pinyin', 'syllables', 'ying').cells).toHaveLength(1)
   })
 
   it('教学列表包含当前进度而不改变课程顺序', () => {

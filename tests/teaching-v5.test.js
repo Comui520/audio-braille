@@ -60,15 +60,20 @@ describe('小节（section）划分（v7）', () => {
   })
 })
 
-describe('键位提示（v7：方内空格分隔，方间分号）', () => {
+describe('键位提示（v12：方内空格分隔，方间星号）', () => {
   it('单方 [1] → 7', () => {
     expect(keyHintForCells([[1]])).toBe('7')
   })
   it('字母 f [1,2,4] → 7 4 8', () => {
     expect(keyHintForCells([[1, 2, 4]])).toBe('7 4 8')
   })
-  it('数字 1 [[3456],[1]] → 1 8 5 2；7', () => {
-    expect(keyHintForCells([[3, 4, 5, 6], [1]])).toBe('1 8 5 2；7')
+  it('数字 1 [[3456],[1]] → 1 8 5 2*7', () => {
+    expect(keyHintForCells([[3, 4, 5, 6], [1]])).toBe('1 8 5 2*7')
+  })
+
+  it('三方提示使用星号且不使用分号', () => {
+    expect(keyHintForCells([[1], [1], [1]])).toBe('7*7*7')
+    expect(keyHintForCells([[1], [1], [1]])).not.toContain('；')
   })
   it('单层输入不再抛异常（旧 bug：拼音/英文教学崩溃）', () => {
     expect(() => keyHintForCells([1, 2, 4])).not.toThrow()

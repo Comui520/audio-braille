@@ -8,7 +8,7 @@ export function createAppState() {
     page: 'home',
     learningTab: 'teaching',
     experimentTab: 'recognition',
-    teaching: { category: null, section: null, item: null, phase: 'learn' },
+    teaching: { category: null, section: null, item: null, phase: 'learn', tone: null },
     input: { confirmedCells: [], currentDots: [], cursorIndex: 0 },
     experiment: { mode: 'letters', stage: 'idle', trials: [], index: 0 },
     audioUnlocked: false
@@ -35,7 +35,8 @@ export function setTeachingLocation(state, location) {
     category: location.category ?? null,
     section: location.section ?? null,
     item: location.item ?? null,
-    phase: location.phase ?? 'learn'
+    phase: location.phase ?? 'learn',
+    tone: location.tone ?? null
   }
   return { ...state, teaching: next }
 }

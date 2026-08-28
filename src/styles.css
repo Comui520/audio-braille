@@ -104,6 +104,11 @@ kbd { display: inline-block; min-width: 1.7em; padding: .12em .35em; border: 1px
 .button-quiet { color: var(--text-muted); }
 .button-small { padding: .4rem .65rem; font-size: .9rem; }
 
+.tone-picker { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .6rem; }
+.tone-option { padding: .4rem .65rem; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font-weight: 650; }
+.tone-option:hover, .tone-option.is-active { border-color: var(--brand); background: #eef3ff; color: var(--brand); }
+.tone-status { margin: .5rem 0 0; color: var(--text-muted); font-size: .88rem; }
+
 .tool-layout { display: grid; grid-template-columns: .8fr 1.2fr; gap: 1.5rem; margin-top: 1.5rem; }
 .tool-copy, .input-tool, .experiment-panel, .reader-panel, .note-reference { padding: 1.25rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .key-row { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }

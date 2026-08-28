@@ -58,8 +58,8 @@ describe('keyHintForCells：分方键位提示（单层/多层都不崩）', () 
   it('单方多点', () => {
     expect(keyHintForCells([[1, 3, 4]])).toBe('7 1 8')
   })
-  it('多方用分号分隔', () => {
-    expect(keyHintForCells([[3, 4, 5, 6], [1]])).toBe('1 8 5 2；7')
+  it('多方用星号分隔', () => {
+    expect(keyHintForCells([[3, 4, 5, 6], [1]])).toBe('1 8 5 2*7')
   })
   it('空 → 空串', () => {
     expect(keyHintForCells([])).toBe('')

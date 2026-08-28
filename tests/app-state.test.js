@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import {
   TOP_LEVEL_PAGES,
   createAppState,
@@ -41,7 +41,14 @@ describe('v9 app state', () => {
     const next = setTeachingLocation(state, {
       category: 'latin', section: 'l1', item: 'f', phase: 'learn'
     })
-    expect(next.teaching).toEqual({ category: 'latin', section: 'l1', item: 'f', phase: 'learn' })
-    expect(state.teaching).toEqual({ category: null, section: null, item: null, phase: 'learn' })
+    expect(next.teaching).toEqual({ category: 'latin', section: 'l1', item: 'f', phase: 'learn', tone: null })
+    expect(state.teaching).toEqual({ category: null, section: null, item: null, phase: 'learn', tone: null })
+  })
+
+  it('教学状态保存音节声调选择', () => {
+    const next = setTeachingLocation(createAppState(), {
+      category: 'pinyin', section: 'syllables', item: 'ba', phase: 'learn', tone: '1'
+    })
+    expect(next.teaching.tone).toBe('1')
   })
 })

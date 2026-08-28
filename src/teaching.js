@@ -18,6 +18,14 @@ export const TONE_NAMES = { '1': '阴平', '2': '阳平', '3': '上声', '4': '�
 export const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
 
 const INITIAL_LIST = ['zh', 'ch', 'sh', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h', 'j', 'q', 'x', 'r', 'z', 'c', 's']
+const ZERO_INITIAL_ALIASES = {
+  yi: ['', 'i'], wu: ['', 'u'], yu: ['', 'ü'], yuan: ['', 'üan'], yue: ['', 'üe'], yun: ['', 'ün'],
+  ya: ['', 'ia'], ye: ['', 'ie'], yao: ['', 'iao'], you: ['', 'iu'],
+  yan: ['', 'ian'], yin: ['', 'in'], yang: ['', 'iang'], ying: ['', 'ing'], yong: ['', 'iong'],
+  wa: ['', 'ua'], wo: ['', 'uo'], wai: ['', 'uai'], wei: ['', 'ui'],
+  wan: ['', 'uan'], wen: ['', 'un'], wang: ['', 'uang'], weng: ['', 'eng']
+}
+const JQX_UMAP = { ju: 'ü', jue: 'üe', juan: 'üan', jun: 'ün', qu: 'ü', que: 'üe', quan: 'üan', qun: 'ün', xu: 'ü', xue: 'üe', xuan: 'üan', xun: 'ün' }
 const DIGIT_TO_LETTER = Object.fromEntries(Object.entries(DIGIT_LETTERS).map(([letter, digit]) => [digit, letter]))
 
 function categoryLabel(category, lang = 'zh') {
@@ -43,14 +51,25 @@ export function getTeachingSections(categoryId, lang = 'zh') {
 }
 
 function parseSyllable(value) {
-  const match = String(value).match(/^(.*?)([1-4])?$/)
+  const raw = String(value)
+  const match = raw.match(/^(.*?)([1-4])?$/)
   if (!match) return null
   const body = match[1]
   const tone = match[2] || null
+  if (ZERO_INITIAL_ALIASES[body]) {
+    const [initial, final] = ZERO_INITIAL_ALIASES[body]
+    return { initial, final, tone }
+  }
   const initial = INITIAL_LIST.find(candidate => body.startsWith(candidate) && body.length > candidate.length) || ''
-  const final = initial ? body.slice(initial.length) : body
+  let final = initial ? body.slice(initial.length) : body
+  if (JQX_UMAP[body] && initial && ['j', 'q', 'x'].includes(initial)) final = JQX_UMAP[body]
   if (!FINALS[final]) return null
   return { initial, final, tone }
+}
+
+function normalizeSyllableId(itemId) {
+  const match = String(itemId).match(/^(.*?)([1-4])?$/)
+  return { base: match?.[1] || String(itemId), tone: match?.[2] || null }
 }
 
 function itemCells(categoryId, sectionId, itemId) {
@@ -76,23 +95,31 @@ function itemType(categoryId, sectionId) {
   return 'digit'
 }
 
-export function getTeachingItem(categoryId, sectionId, itemId, lang = 'zh') {
+export function getTeachingItem(categoryId, sectionId, itemId, lang = 'zh', toneOverride = null) {
   const section = CURRICULUM[categoryId]?.sections.find(value => value.id === sectionId)
-  if (!section || !section.items.includes(itemId)) return null
+  const normalized = categoryId === 'pinyin' && sectionId === 'syllables' ? normalizeSyllableId(itemId) : { base: itemId, tone: null }
+  const resolvedItemId = normalized.base
+  if (!section || !section.items.includes(resolvedItemId)) return null
   const type = itemType(categoryId, sectionId)
-  const cells = itemCells(categoryId, sectionId, itemId)
+  const cells = categoryId === 'pinyin' && sectionId === 'syllables'
+    ? (() => {
+        const syllable = parseSyllable(resolvedItemId)
+        return syllable ? toCells(syllableToDots(syllable.initial, syllable.final, toneOverride ?? normalized.tone)) : []
+      })()
+    : itemCells(categoryId, sectionId, resolvedItemId)
   const names = sectionId === 'cn' ? CN_SYMBOL_NAMES : EN_SYMBOL_NAMES
-  const syllable = type === 'syllable' ? parseSyllable(itemId) : null
+  const syllable = type === 'syllable' ? parseSyllable(resolvedItemId) : null
+  const tone = normalized.tone || syllable?.tone || (type === 'syllable' ? toneOverride : null)
   return {
-    itemId,
-    id: `${categoryId}.${sectionId}.${itemId}`,
+    itemId: resolvedItemId,
+    id: `${categoryId}.${sectionId}.${resolvedItemId}`,
     category: categoryId,
     section: sectionId,
     type,
-    label: type === 'symbol' ? (names[itemId] || itemId) : type === 'syllable' ? itemId.replace(/[1-4]$/, '') : itemId,
-    symbol: type === 'symbol' ? itemId : null,
-    tone: syllable?.tone || null,
-    toneName: syllable?.tone ? TONE_NAMES[syllable.tone] : null,
+    label: type === 'symbol' ? (names[resolvedItemId] || resolvedItemId) : resolvedItemId,
+    symbol: type === 'symbol' ? resolvedItemId : null,
+    tone,
+    toneName: tone ? TONE_NAMES[tone] : null,
     cells,
     unicode: cellsToUnicode(cells),
     lang
