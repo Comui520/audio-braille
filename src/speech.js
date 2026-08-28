@@ -23,8 +23,8 @@ export function speakAndWait(text, { rate = 0.9, pitch = 1 } = {}) {
     u.onerror = finish
     cancelSpeech()
     window.speechSynthesis.speak(u)
-    // 使用较长兜底，仅防止极少数浏览器不派发 onend；正常结束以 onend 为准。
-    setTimeout(finish, Math.max(5000, String(text).length * 500))
+    // 语音结束事件是主同步信号；极慢或不派发事件的浏览器使用 12 秒兜底。
+    setTimeout(finish, Math.max(12000, String(text).length * 700))
   })
 }
 
