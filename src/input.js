@@ -57,7 +57,7 @@ export function buildSyllable(buffers, withTone = true) {
     initial: variation.initial,
     final: variation.final,
     tone,
-    dots: syllableToDots(variation.initial, variation.final, tone)
+    dots: syllableToDots(initialComponent.value, finalComponent.value, tone)
   }
 }
 

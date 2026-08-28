@@ -57,6 +57,13 @@ describe('buildSyllable（布尔→数字缓冲区）', () => {
     expect(syl.initial).toBe('j')
     expect(syl.final).toBe('i')
   })
+  it('声调省写按原书写声母，不按变读后的 j/q/x', () => {
+    const ki = buildSyllable({ initial: [1, 3], final: [2, 4], tone: [2, 3] }, true)
+    expect(ki.dots).toEqual([[1, 3], [2, 4]])
+    const hi = buildSyllable({ initial: [1, 2, 5], final: [2, 4], tone: [2] }, true)
+    expect(hi.dots).toEqual([[1, 2, 5], [2, 4]])
+  })
+
   it('缺少声母或韵母返回 null', () => {
     expect(buildSyllable({ initial: null, final: [3, 5], tone: null }, false)).toBe(null)
     expect(buildSyllable({ initial: [1, 3, 4], final: null, tone: null }, false)).toBe(null)

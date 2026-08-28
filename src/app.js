@@ -261,6 +261,11 @@ export function initApp() {
       render()
     }
     else if (action === 'speak-guide') speak('小键盘七、四、一对应盲文点一、二、三；八、五、二对应点四、五、六。零提交，星号下一方，斜杠上一方，三退格，减号清空，加号朗读，句号空格。')
+    else if (action === 'toggle-language') {
+      const next = getLang() === 'en' ? 'zh' : 'en'
+      setLang(next)
+      cancelSpeech()
+    }
     else if (action === 'learning-tab') state = { ...state, learningTab: target.dataset.tab }
     else if (action === 'experiment-tab') { experimentToken++; reader.stop(); cancelSpeech(); state = { ...state, experimentTab: target.dataset.tab } }
     else if (action === 'teaching-home') state = { ...state, teaching: { ...state.teaching, category: null, section: null, item: null } }
