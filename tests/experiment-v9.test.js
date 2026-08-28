@@ -6,6 +6,14 @@ describe('v9 AudioBraille 实验模型', () => {
     expect(getExperimentTabs()).toEqual(['recognition', 'reader'])
   })
 
+  it('正式题目带有 stimulusId 和大题库元数据', () => {
+    const model = createExperimentModel({ trialCount: 2, dataClass: 'formal', studyVersion: 'v13-1' })
+    model.start('syllables', { seed: 'test-seed', phase: 'formal' })
+    const trials = model.snapshot().trials
+    expect(trials).toHaveLength(2)
+    expect(trials.every(trial => trial.stimulusId && trial.bankVersion && trial.difficultyStratum)).toBe(true)
+  })
+
   it('模式切换会清理旧一轮状态', () => {
     const model = createExperimentModel({ trialCount: 3 })
     model.start('letters')

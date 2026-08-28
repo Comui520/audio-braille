@@ -6,7 +6,7 @@ export const BRAILLE_EXPERIENCE = ['none', 'beginner', 'experienced', 'undisclos
 export const AUDIO_EXPERIENCE = ['none', 'some', 'audiobraille-trained', 'undisclosed']
 
 export function deriveCohort(profile = {}) {
-  if (profile.visionStatus === 'blind' && profile.brailleExperience === 'experienced') {
+  if ((profile.visionStatus === 'blind' || profile.visionStatus === 'low-vision') && profile.brailleExperience === 'experienced') {
     return 'blind-braille-experienced'
   }
   if (profile.brailleExperience === 'beginner' || profile.brailleExperience === 'experienced') {
@@ -30,12 +30,16 @@ export function validateParticipantProfile(profile = {}) {
   return result(errors.length === 0, errors)
 }
 
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
 export function validateFormalRecord(record = {}) {
   const errors = []
   if (record.dataClass !== 'formal') errors.push('dataClass')
   if (record.consentAccepted !== true) errors.push('consentAccepted')
-  if (!record.studyVersion) errors.push('studyVersion')
-  if (!record.participantId) errors.push('participantId')
-  if (!record.sessionId) errors.push('sessionId')
+  if (!isNonEmptyString(record.studyVersion)) errors.push('studyVersion')
+  if (!isNonEmptyString(record.participantId)) errors.push('participantId')
+  if (!isNonEmptyString(record.sessionId)) errors.push('sessionId')
   return result(errors.length === 0, errors)
 }

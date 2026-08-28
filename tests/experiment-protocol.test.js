@@ -18,6 +18,8 @@ describe('实验协议', () => {
   it('根据背景字段归类参与者', () => {
     expect(deriveCohort({ visionStatus: 'blind', brailleExperience: 'experienced' }))
       .toBe('blind-braille-experienced')
+    expect(deriveCohort({ visionStatus: 'low-vision', brailleExperience: 'experienced' }))
+      .toBe('blind-braille-experienced')
     expect(deriveCohort({ visionStatus: 'sighted', brailleExperience: 'beginner' }))
       .toBe('braille-trained')
     expect(deriveCohort({ visionStatus: 'sighted', brailleExperience: 'none' }))
@@ -39,5 +41,8 @@ describe('实验协议', () => {
     expect(validateFormalRecord({
       dataClass: 'formal', consentAccepted: true, studyVersion: 'v13-1', participantId: 'p1', sessionId: 's1'
     }).valid).toBe(true)
+    expect(validateFormalRecord({
+      dataClass: 'formal', consentAccepted: true, studyVersion: {}, participantId: true, sessionId: 's1'
+    }).valid).toBe(false)
   })
 })

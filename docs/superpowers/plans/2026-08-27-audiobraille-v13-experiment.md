@@ -40,9 +40,7 @@
 - 修改：`src/app-state.js`。
 - 测试：`tests/experiment-protocol.test.js`、`tests/app-state.test.js`。
 
-- [ ] **步骤 1：写失败测试**
-
-新增协议测试：
+- [x] **步骤 1：写失败测试**
 
 ```js
 import { describe, it, expect } from 'vitest'
@@ -91,19 +89,12 @@ it('默认没有进入正式实验，正式阶段从同意开始', () => {
 })
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
-
-运行：
-
-```text
-npx vitest run tests/experiment-protocol.test.js tests/app-state.test.js
+- [x] **步骤 2：运行测试验证失败**
 ```
 
 预期：协议模块不存在，或 `createAppState()` 没有研究状态字段。
 
-- [ ] **步骤 3：实现最少代码**
-
-在 `src/experiment-protocol.js` 定义：
+- [x] **步骤 3：实现最少代码**
 
 ```js
 export const STUDY_VERSION = 'v13-1'
@@ -128,20 +119,12 @@ experiment: {
 }
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
-
-运行：
-
-```text
-npx vitest run tests/experiment-protocol.test.js tests/app-state.test.js
+- [x] **步骤 4：运行测试验证通过**
 ```
 
 预期：通过，现有页面和实验模型测试没有被修改行为破坏。
 
-- [ ] **步骤 5：Commit**
-
-```powershell
-git add src/experiment-protocol.js src/app-state.js tests/experiment-protocol.test.js tests/app-state.test.js
+- [x] **步骤 5：Commit** src/app-state.js tests/experiment-protocol.test.js tests/app-state.test.js
 git -c user.name="pi" -c user.email="pi@local" commit -m "feat: 建立实验协议和参与者数据模型"
 ```
 
@@ -154,11 +137,7 @@ git -c user.name="pi" -c user.email="pi@local" commit -m "feat: 建立实验协�
 - 修改：`src/experiment.js`。
 - 测试：`tests/experiment-bank.test.js`、`tests/experiment-v5.test.js`、`tests/experiment-v9.test.js`。
 
-- [ ] **步骤 1：写失败测试**
-
-```js
-import { describe, it, expect } from 'vitest'
-import { buildRecognitionBank, sampleRecognitionTrials } from '../src/experiment-bank.js'
+- [x] **步骤 1：写失败测试**, sampleRecognitionTrials } from '../src/experiment-bank.js'
 
 describe('辨识刺激库', () => {
   it('四类刺激都有稳定 ID，拼音库远大于当前十几道样例', () => {
@@ -189,19 +168,12 @@ describe('辨识刺激库', () => {
 })
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
-
-运行：
-
-```text
-npx vitest run tests/experiment-bank.test.js tests/experiment-v5.test.js tests/experiment-v9.test.js
+- [x] **步骤 2：运行测试验证失败** tests/experiment-v5.test.js tests/experiment-v9.test.js
 ```
 
 预期：`experiment-bank.js` 不存在，现有实验只使用小型 `PINYIN_POOL`。
 
-- [ ] **步骤 3：实现最少代码**
-
-`buildRecognitionBank()` 使用：
+- [x] **步骤 3：实现最少代码**
 
 - `LATIN_LETTERS` 生成 26 个字母刺激；
 - `DIGIT_LETTERS` 生成 10 个数字刺激；
@@ -215,18 +187,10 @@ npx vitest run tests/experiment-bank.test.js tests/experiment-v5.test.js tests/e
 
 `buildTrials(mode, n, lang, options)` 兼容旧签名，正式模式使用新题库和 `stimulusId`，casual 模式也使用同一题库但标记 `dataClass: 'casual'`。
 
-- [ ] **步骤 4：运行测试验证通过**
-
-运行：
-
-```text
-npx vitest run tests/experiment-bank.test.js tests/experiment-v5.test.js tests/experiment-v9.test.js
+- [x] **步骤 4：运行测试验证通过** tests/experiment-v5.test.js tests/experiment-v9.test.js
 ```
 
-- [ ] **步骤 5：Commit**
-
-```powershell
-git add src/experiment-bank.js src/experiment.js tests/experiment-bank.test.js tests/experiment-v5.test.js tests/experiment-v9.test.js
+- [x] **步骤 5：Commit** src/experiment.js tests/experiment-bank.test.js tests/experiment-v5.test.js tests/experiment-v9.test.js
 git -c user.name="pi" -c user.email="pi@local" commit -m "feat: 建立分层随机 AudioBraille 刺激库"
 ```
 
