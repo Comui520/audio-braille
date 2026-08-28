@@ -3,39 +3,32 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AudioBraille 盲文学习平台</title>
+  <title>AudioBraille</title>
 </head>
 <body>
   <a class="skip-link" href="#main-content">跳到主内容</a>
   <header class="app-header">
-    <div class="brand">
+    <a class="brand" href="#" data-action="home" aria-label="AudioBraille 首页">
       <span class="brand-mark" aria-hidden="true">⠁⠃</span>
       <span class="brand-name">AudioBraille</span>
-    </div>
+    </a>
     <nav aria-label="主导航" class="main-nav">
-      <button data-page="home" data-i18n="navHome" aria-current="true">首页</button>
-      <button data-page="guide" data-i18n="navGuide">说明</button>
-      <button data-page="teaching" data-i18n="navTeaching">学习</button>
-      <button data-page="input" data-i18n="navInput">输入</button>
-      <button data-page="experiment" data-i18n="navExperiment">测试</button>
-      <button data-page="notes" data-i18n="navNotes">笔记</button>
-      <button data-page="reader" data-i18n="navReader">听书</button>
+      <button data-action="home" aria-current="true">首页</button>
+      <button data-action="learning" aria-current="false">学习盲文</button>
+      <button data-action="experiment" aria-current="false">AudioBraille 实验</button>
+      <button data-action="notes" aria-current="false">笔记</button>
     </nav>
-    <div class="header-actions">
-      <button id="lang-toggle" class="lang-btn" title="切换语言 Ctrl+Shift+L" aria-label="切换语言">
-        <span class="lang-zh">中文</span><span class="lang-sep">/</span><span class="lang-en">EN</span>
-      </button>
-    </div>
+    <button id="lang-toggle" class="lang-btn" type="button" data-action="toggle-language" aria-label="切换语言">中文 / EN</button>
   </header>
-  <main id="main-content" tabindex="-1" aria-live="polite"></main>
+  <main id="main-content" tabindex="-1"></main>
   <div id="status" role="status" aria-live="polite"></div>
-  <!-- 启动门：全屏遮罩，按 0 前挡住一切 -->
-  <div id="start-gate" role="dialog" aria-label="start">
+  <div id="start-gate" role="dialog" aria-modal="true" aria-label="开始使用">
     <div class="gate-card">
       <div class="gate-mark" aria-hidden="true">⠁⠃</div>
-      <div class="gate-title">AudioBraille</div>
-      <div class="gate-hint" id="gate-hint">请按 0 开始</div>
-      <div class="gate-guide" id="gate-guide"></div>
+      <h1>AudioBraille</h1>
+      <p>学习盲文，体验一种用空间音频聆听盲文的新方法。</p>
+      <p class="gate-hint">请按 0 开始</p>
+      <p class="gate-guide">小键盘 7、4、1 对应点 1、2、3；8、5、2 对应点 4、5、6。按 0 提交，按 * 确认下一方。</p>
     </div>
   </div>
   <script type="module" src="/src/main.js"></script>

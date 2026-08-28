@@ -14,17 +14,10 @@ beforeEach(() => {
 })
 
 describe('英文优先输入模式', () => {
-  it('英文语言 → latin 模式（单方直出）', () => {
-    localStorage.setItem('AudioBraille.lang', 'en')
-    expect(resolveInputMode({})).toBe('latin')
-  })
-  it('中文语言 → pinyin 模式（默认带调）', () => {
-    localStorage.setItem('AudioBraille.lang', 'zh')
-    expect(resolveInputMode({})).toBe('pinyin')
-  })
-  it('中文语言 + pinyinMode:false → latin', () => {
-    localStorage.setItem('AudioBraille.lang', 'zh')
-    expect(resolveInputMode({ pinyinMode: false })).toBe('latin')
+  it('语言由调用层传入，不读取浏览器存储', () => {
+    expect(resolveInputMode({ language: 'en' })).toBe('latin')
+    expect(resolveInputMode({ language: 'zh' })).toBe('pinyin')
+    expect(resolveInputMode({ language: 'zh', pinyinMode: false })).toBe('latin')
   })
   it('键位映射不变（官方布局）', () => {
     expect(KEY_DOT_MAP['7']).toBe(0)

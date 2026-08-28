@@ -1,4 +1,4 @@
-// src/teaching.js —— v9：四大区域与自由选择教学模型
+﻿// src/teaching.js —— v9：四大区域与自由选择教学模型
 import {
   LATIN_LETTERS,
   latinToDots,
@@ -84,11 +84,12 @@ export function getTeachingItem(categoryId, sectionId, itemId, lang = 'zh') {
   const names = sectionId === 'cn' ? CN_SYMBOL_NAMES : EN_SYMBOL_NAMES
   const syllable = type === 'syllable' ? parseSyllable(itemId) : null
   return {
+    itemId,
     id: `${categoryId}.${sectionId}.${itemId}`,
     category: categoryId,
     section: sectionId,
     type,
-    label: type === 'symbol' ? (names[itemId] || itemId) : itemId,
+    label: type === 'symbol' ? (names[itemId] || itemId) : type === 'syllable' ? itemId.replace(/[1-4]$/, '') : itemId,
     symbol: type === 'symbol' ? itemId : null,
     tone: syllable?.tone || null,
     toneName: syllable?.tone ? TONE_NAMES[syllable.tone] : null,
@@ -104,6 +105,7 @@ export function getTeachingItems(categoryId, sectionId, progress = {}) {
   const learned = new Set(Array.isArray(progress.learned) ? progress.learned : [])
   return section.items.map(itemId => ({
     ...getTeachingItem(categoryId, sectionId, itemId),
+    itemId,
     learned: learned.has(itemId),
     current: progress.current === itemId
   }))

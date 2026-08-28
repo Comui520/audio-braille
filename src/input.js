@@ -13,9 +13,8 @@ const KEY_POINT_MAP = Object.fromEntries(Object.entries(KEY_DOT_MAP).map(([key, 
 export const keyToDot = key => (key in KEY_DOT_MAP ? KEY_DOT_MAP[key] : null)
 export const keyToPoint = key => (key in KEY_POINT_MAP ? KEY_POINT_MAP[key] : null)
 
-export function resolveInputMode(settings = {}) {
-  const lang = typeof localStorage !== 'undefined' ? localStorage.getItem('AudioBraille.lang') : 'zh'
-  return lang === 'en' ? 'latin' : (settings.pinyinMode === false ? 'latin' : 'pinyin')
+export function resolveInputMode({ language = 'zh', pinyinMode = true } = {}) {
+  return language === 'en' ? 'latin' : (pinyinMode === false ? 'latin' : 'pinyin')
 }
 
 export const CELL_ORDER = ['initial', 'final', 'tone']
