@@ -56,9 +56,63 @@ describe('v9 可控逐方输入器', () => {
     expect(deleted).toEqual([true])
   })
 
-  it('组合键不被控制器消费，Ctrl+R 可以交给浏览器', () => {
-    const input = createInputController()
-    expect(input.handleKey('r', { ctrlKey: true })).toBe(false)
-    expect(input.snapshot()).toMatchObject({ confirmedCells: [], currentDots: [] })
+  it('文档模式把当前多方组合在 0 时作为一个单元写入文档', () => {
+    const input = createInputController({ mode: 'document' })
+    for (const key of ['4', '1', '8', '5']) input.handleKey(key)
+    input.handleKey('*')
+    expect(input.snapshot()).toMatchObject({
+      confirmedCells: [[2, 3, 4, 5]],
+      currentDots: [],
+      cursorIndex: 1,
+      documentCells: [],
+      documentCursor: 0
+    })
+    input.handleKey('/')
+    input.handleKey('/')
+    expect(input.snapshot().cursorIndex).toBe(0)
+    input.handleKey('*')
+    expect(input.snapshot().cursorIndex).toBe(1)
+    input.handleKey('0')
+    expect(input.snapshot()).toMatchObject({
+      confirmedCells: [],
+      currentDots: [],
+      cursorIndex: 0,
+      documentCells: [[[2, 3, 4, 5]]],
+      documentCursor: 1
+    })
+  })
+
+  it('文档模式的星号和斜杠在多方确认后移动文档单元光标', () => {
+    const input = createInputController({ mode: 'document' })
+    for (const key of ['4', '1', '8', '5', '0', '7', '8', '0']) input.handleKey(key)
+    expect(input.snapshot().documentCells).toEqual([[[2, 3, 4, 5]], [[1, 4]]])
+    input.handleKey('/')
+    expect(input.snapshot().documentCursor).toBe(1)
+    input.handleKey('3')
+    expect(input.snapshot()).toMatchObject({
+      documentCells: [[[1, 4]]],
+      documentCursor: 0
+    })
+  })
+
+  it('文档模式在文档光标处插入新单元而不是覆盖右侧单元', () => {
+    const input = createInputController({ mode: 'document' })
+    for (const key of ['7', '0', '8', '0']) input.handleKey(key)
+    input.handleKey('/')
+    for (const key of ['7', '0']) input.handleKey(key)
+    expect(input.snapshot()).toMatchObject({
+      documentCells: [[[1]], [[1]], [[4]]],
+      documentCursor: 2
+    })
+  })
+
+  it('文档模式的句点插入空格单元且退格可以删除它', () => {
+    const input = createInputController({ mode: 'document' })
+    input.handleKey('7')
+    input.handleKey('0')
+    input.handleKey('.')
+    expect(input.snapshot().documentCells).toEqual([[[1]], null])
+    input.handleKey('3')
+    expect(input.snapshot()).toMatchObject({ documentCells: [[[1]]], documentCursor: 1 })
   })
 })

@@ -13,7 +13,8 @@ import { playAudioBraille, buildCellSequence, unlockAudio } from './audio-braill
 import { speak, speakAndWait, cancelSpeech } from './speech.js'
 import { getLang, setLang, t } from './i18n.js'
 import { toCells, cellsToUnicode, cellsToDiagram, keyHintForCells } from './cells.js'
-import { buildInputDisplayModel } from './input-display.js'
+import { dotsToUnicode, unicodeToDots } from './braille-engine.js'
+import { buildInputDisplayModel, buildDocumentDisplayModel } from './input-display.js'
 
 export { createAppState }
 export function buildPages() { return [...TOP_LEVEL_PAGES] }
@@ -37,6 +38,24 @@ export function buildHomeActions() {
 
 export function appendSpace(existing = '') {
   return `${existing} `
+}
+
+export function editorTextToAtoms(text = '') {
+  return [...String(text)].map(char => {
+    const code = char.codePointAt(0)
+    if (code >= 0x2800 && code <= 0x28ff) return [unicodeToDots(char)]
+    if (char === ' ') return null
+    return { kind: 'text', value: char }
+  })
+}
+
+export function editorAtomsToText(atoms = []) {
+  return (Array.isArray(atoms) ? atoms : []).map(atom => {
+    if (Array.isArray(atom)) return cellsToUnicode(atom)
+    if (atom === null) return ' '
+    if (atom && atom.kind === 'text') return atom.value || ''
+    return ''
+  }).join('')
 }
 
 export function appendCommittedBraille(existing, cells) {
@@ -69,7 +88,31 @@ function diagramHtml(cells) {
 
 function inputDisplayHtml(confirmedCells, currentDots, cursorIndex, label = '当前输入') {
   const models = buildInputDisplayModel(confirmedCells, currentDots, cursorIndex)
-  return `<div class="input-display" aria-label="${label}">${models.map((model, index) => `<div class="input-cell ${model.kind === 'current' ? 'is-current' : 'is-confirmed'}${model.cursor ? ' is-cursor' : ''}" aria-label="${model.kind === 'current' ? '当前方' : `已确认第 ${index + 1} 方`}">${model.dots.map((on, dot) => `<i class="input-dot${on ? ' is-on' : ''}" data-dot="${dot + 1}"></i>`).join('')}</div>`).join('<span class="cell-separator" aria-hidden="true">；</span>')}</div>`
+  return `<div class="input-display composition-display" aria-label="${label}">${models.map((model, index) => {
+    const kindClass = model.kind === 'space' ? ' is-space' : model.kind === 'text' ? ' is-text' : ''
+    const content = model.kind === 'space'
+      ? '<span class="input-space-marker" aria-hidden="true">␠</span>'
+      : model.kind === 'text'
+        ? `<span class="input-text-marker">${esc(model.text)}</span>`
+        : model.dots.map((on, dot) => `<i class="input-dot${on ? ' is-on' : ''}" data-dot="${dot + 1}"></i>`).join('')
+    const itemLabel = model.kind === 'current'
+      ? '当前方'
+      : model.kind === 'space'
+        ? `已确认第 ${index + 1} 个空格`
+        : model.kind === 'text'
+          ? `已确认第 ${index + 1} 个文字字符`
+          : `已确认第 ${index + 1} 方`
+    return `<div class="input-cell${kindClass}${model.cursor ? ' is-cursor' : ''}" aria-label="${itemLabel}">${content}</div>`
+  }).join('<span class="cell-separator" aria-hidden="true">；</span>')}</div>`
+}
+
+function documentDisplayHtml(documentCells, documentCursor, label = '已确认盲文', showCursor = true) {
+  const models = buildDocumentDisplayModel(documentCells, documentCursor, showCursor)
+  return `<div class="document-display" aria-label="${label}">${models.map(model => {
+    if (model.kind === 'document-cursor') return '<span class="document-caret" role="img" aria-label="文档光标位置"></span>'
+    if (model.kind === 'space') return '<span class="document-space" aria-label="空格">␠</span>'
+    return `<span class="document-unit">${model.cells.map(dots => `<span class="document-cell">${dots.map(on => `<i class="input-dot${on ? ' is-on' : ''}"></i>`).join('')}</span>`).join('<span class="document-cell-separator" aria-hidden="true">；</span>')}</span>`
+  }).join('')}</div>`
 }
 export function initApp() {
   applyTheme()
@@ -86,6 +129,12 @@ export function initApp() {
   let inputOutput = ''
   let progressCache = {}
   let currentReaderText = SAMPLE_BRAILLE
+  const readerAtoms = editorTextToAtoms(SAMPLE_BRAILLE)
+  const editorDocuments = {
+    online: { cells: [], cursor: 0 },
+    notes: { cells: [], cursor: 0 },
+    reader: { cells: readerAtoms, cursor: readerAtoms.length }
+  }
   let experimentToken = 0
   let gateOpen = false
 
@@ -174,7 +223,11 @@ export function initApp() {
   }
 
   function renderInput() {
-    return `<div class="tool-layout"><div class="tool-copy"><h2>在线输入</h2><p>用数字小键盘输入盲文。点位键只更新当前方，按 0 才会提交。</p><div class="key-row"><kbd>7</kbd><kbd>4</kbd><kbd>1</kbd><kbd>8</kbd><kbd>5</kbd><kbd>2</kbd></div></div><div class="input-tool">${inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, state.input.cursorIndex, '在线输入盲文点位')}<div class="input-output" aria-live="polite">${esc(inputOutput || '等待输入')}</div><p class="helper">按 * 确认当前方，按 0 上屏</p></div></div>`
+    const input = state.input
+    const composition = input.compositionCells || input.confirmedCells
+    const compositionCursor = input.compositionCursor ?? input.cursorIndex
+    const hasComposition = composition.length > 0 || input.currentDots.length > 0
+    return `<div class="tool-layout"><div class="tool-copy"><h2>在线输入</h2><p>用数字小键盘输入盲文。上方只显示当前多方，按 0 确认后进入下方文档。</p><div class="key-row"><kbd>7</kbd><kbd>4</kbd><kbd>1</kbd><kbd>8</kbd><kbd>5</kbd><kbd>2</kbd></div></div><div class="input-tool"><div class="input-section-label">当前多方输入</div>${inputDisplayHtml(composition, input.currentDots, compositionCursor, '当前多方输入')}<div class="input-section-label">已确认盲文文档</div>${documentDisplayHtml(input.documentCells || [], input.documentCursor || 0, '已确认盲文文档', !hasComposition)}<div class="input-output" aria-live="polite">${esc(inputOutput || '等待输入')}</div><p class="helper">按 * 确认当前方，按 0 确认整组；当前组为空时，按 / 或 * 移动下方光标</p></div></div>`
   }
 
   function renderExperiment() {
@@ -197,7 +250,11 @@ export function initApp() {
   }
 
   function renderReader() {
-    return `<div class="reader-panel"><h2>听书场景</h2><p>这里输入的是盲文。使用数字小键盘输入方，按 0 上屏；也可以修改下方盲文内容后播放。</p>${inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, state.input.cursorIndex, '听书输入盲文点位')}<textarea id="reader-text" rows="4" aria-label="盲文内容" readonly>${esc(currentReaderText)}</textarea><label class="range-label">速度 <input id="reader-speed" type="range" min="0.5" max="5" step="0.5" value="${reader.getSpeed()}"><output>${reader.getSpeed()}x</output></label><div class="button-row"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-stop">停止</button></div><div id="reader-progress" aria-live="polite"></div></div>`
+    const input = state.input
+    const composition = input.compositionCells || input.confirmedCells
+    const compositionCursor = input.compositionCursor ?? input.cursorIndex
+    const hasComposition = composition.length > 0 || input.currentDots.length > 0
+    return `<div class="reader-panel"><h2>听书场景</h2><p>这里输入的是盲文。上方只显示当前多方；按 0 确认后，内容进入下方盲文文档。</p>${inputDisplayHtml(composition, input.currentDots, compositionCursor, '当前多方输入')}${documentDisplayHtml(input.documentCells || [], input.documentCursor || 0, '已确认盲文文档', !hasComposition)}<textarea id="reader-text" rows="4" aria-label="盲文内容" readonly>${esc(currentReaderText)}</textarea><label class="range-label">速度 <input id="reader-speed" type="range" min="0.5" max="5" step="0.5" value="${reader.getSpeed()}"><output>${reader.getSpeed()}x</output></label><div class="button-row"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-stop">停止</button></div><div id="reader-progress" aria-live="polite"></div></div>`
   }
 
   function renderNotes() {
@@ -205,15 +262,22 @@ export function initApp() {
     legacy.querySelector('h1')?.remove()
     const textarea = legacy.querySelector('#note-textarea')
     if (textarea) {
+      const input = state.input
+      const composition = input.compositionCells || input.confirmedCells
+      const compositionCursor = input.compositionCursor ?? input.cursorIndex
+      const hasComposition = composition.length > 0 || input.currentDots.length > 0
       textarea.value = noteText
       textarea.textContent = noteText
-      textarea.insertAdjacentHTML('beforebegin', inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, state.input.cursorIndex, '笔记输入盲文点位'))
+      textarea.insertAdjacentHTML('beforebegin', inputDisplayHtml(composition, input.currentDots, compositionCursor, '当前多方输入'))
+      textarea.insertAdjacentHTML('beforebegin', documentDisplayHtml(input.documentCells || [], input.documentCursor || 0, '已确认盲文文档', !hasComposition))
     }
     return `<section class="page page-notes"><div class="page-heading"><div><p class="eyebrow">NOTES</p><h1>笔记</h1><p class="lead">用盲文记录，也可以分别用文字或 AudioBraille 回听。</p></div></div>${legacy.innerHTML}</section>`
   }
 
   function render() {
     if (!main) return
+    const currentController = activeController()
+    if (currentController) setInputSnapshot(currentController.snapshot())
     document.querySelectorAll('.main-nav [data-action]').forEach(button => {
       const item = buildTopNav(getLang()).find(value => value.id === button.dataset.action)
       if (item) button.textContent = item.label
@@ -235,14 +299,18 @@ export function initApp() {
     const noteArea = document.querySelector('#note-textarea')
     noteArea?.addEventListener('input', () => {
       noteText = noteArea.value
+      loadEditorText('notes', noteText)
       notes.updateReference?.()
     })
     const readerText = document.querySelector('#reader-text')
-    readerText?.addEventListener('input', () => { currentReaderText = readerText.value })
+    readerText?.addEventListener('input', () => {
+      currentReaderText = readerText.value
+      loadEditorText('reader', currentReaderText)
+    })
     const importFile = document.querySelector('#note-import-file')
     importFile?.addEventListener('change', () => {
       const file = importFile.files?.[0]
-      if (file) void notes.importNote(file)
+      if (file) void notes.importNote(file).then(() => loadEditorText('notes', document.querySelector('#note-textarea')?.value || ''))
     })
   }
 
@@ -279,17 +347,84 @@ export function initApp() {
     }
   })
 
+  function activeEditorName() {
+    if (state.page === 'notes') return 'notes'
+    if (state.page === 'experiment' && state.experimentTab === 'reader') return 'reader'
+    if (state.page === 'learning' && state.learningTab === 'input') return 'online'
+    return null
+  }
+
+  function activeController() {
+    const name = activeEditorName()
+    return name ? editorControllers[name] : inputController
+  }
+
+  function syncEditorValue(name, snapshot) {
+    const cells = snapshot.documentCells.map(atom => Array.isArray(atom)
+      ? atom.map(cell => [...cell])
+      : (atom && typeof atom === 'object' ? { ...atom } : atom))
+    editorDocuments[name] = { cells, cursor: snapshot.documentCursor }
+    const text = editorAtomsToText(cells)
+    if (name === 'notes') noteText = text
+    if (name === 'reader') currentReaderText = text
+    if (name === 'online') inputOutput = text
+    if (activeEditorName() === name) setInputSnapshot(snapshot)
+    if (name === 'notes') {
+      const textarea = document.querySelector('#note-textarea')
+      if (textarea && textarea.value !== text) {
+        textarea.value = text
+        textarea.textContent = text
+      }
+      notes.updateReference?.()
+    }
+  }
+
+  function createEditorController(name) {
+    const documentState = editorDocuments[name]
+    return createInputController({
+      mode: 'document',
+      initialDocumentCells: documentState.cells,
+      initialDocumentCursor: documentState.cursor,
+      onChange: snapshot => syncEditorValue(name, snapshot)
+    })
+  }
+
+  const editorControllers = {
+    online: createEditorController('online'),
+    notes: createEditorController('notes'),
+    reader: createEditorController('reader')
+  }
+
+  function loadEditorText(name, text) {
+    const atoms = editorTextToAtoms(text)
+    editorControllers[name].setDocument(atoms, atoms.length)
+  }
+
   function setInputSnapshot(snapshot) {
-    state = { ...state, input: {
-      confirmedCells: snapshot.confirmedCells.map(cell => [...cell]),
+    const clone = atom => Array.isArray(atom)
+      ? atom.map(cell => Array.isArray(cell) ? [...cell] : cell)
+      : (atom && typeof atom === 'object' ? { ...atom } : atom)
+    const document = Array.isArray(snapshot.documentCells)
+    state = { ...state, input: document ? {
+      confirmedCells: (snapshot.compositionCells || []).map(clone),
+      currentDots: [...snapshot.currentDots],
+      cursorIndex: snapshot.compositionCursor,
+      compositionCells: (snapshot.compositionCells || []).map(clone),
+      compositionCursor: snapshot.compositionCursor,
+      documentCells: snapshot.documentCells.map(clone),
+      documentCursor: snapshot.documentCursor
+    } : {
+      confirmedCells: snapshot.confirmedCells.map(clone),
       currentDots: [...snapshot.currentDots],
       cursorIndex: snapshot.cursorIndex
     } }
   }
 
   function resetInput() {
-    inputController.clear()
-    setInputSnapshot(inputController.snapshot())
+    const controller = activeController()
+    if (activeEditorName()) controller.cancelComposition()
+    else controller.clear()
+    setInputSnapshot(controller.snapshot())
   }
 
   function onInputCommit(cells) {
@@ -369,7 +504,7 @@ export function initApp() {
     else if (action === 'notes-play-audio') { noteText = document.querySelector('#note-textarea')?.value || ''; void notes.readAloud('braille', Number(document.querySelector('#notes-speed')?.value || 1)) }
     else if (action === 'notes-export') void notes.exportNote('json')
     else if (action === 'notes-import') document.querySelector('#note-import-file')?.click()
-    else if (action === 'notes-new') notes.newNote()
+    else if (action === 'notes-new') { notes.newNote(); loadEditorText('notes', '') }
     else if (TOP_LEVEL_PAGES.includes(action)) { experimentToken++; reader.stop(); cancelSpeech(); state = { ...state, page: action, input: { confirmedCells: [], currentDots: [] } } }
     render()
   }
@@ -394,11 +529,12 @@ export function initApp() {
     if (!gateOpen) return
     if (event.ctrlKey || event.altKey || event.metaKey) return
     if (event.key === 'F1') { event.preventDefault(); speak('按零提交，星号下一方，斜杠上一方，三退格，减号清空，加号朗读，句号空格。'); return }
+    const controller = activeController()
     const point = keyToPoint(event.key)
     if (point !== null) {
       event.preventDefault()
-      inputController.handleKey(event.key)
-      setInputSnapshot(inputController.snapshot())
+      controller.handleKey(event.key)
+      setInputSnapshot(controller.snapshot())
       render()
       return
     }
@@ -418,25 +554,10 @@ export function initApp() {
       if (trial) void playCells(trial.cells)
       return
     }
-    if (event.key === '.') {
-      if (state.page === 'notes') {
-        const textarea = document.querySelector('#note-textarea')
-        if (textarea) {
-          noteText = appendSpace(textarea.value)
-          textarea.value = noteText
-        }
-      } else if (state.page === 'experiment' && state.experimentTab === 'reader') {
-        currentReaderText = appendSpace(currentReaderText)
-      } else if (state.page === 'learning' && state.learningTab === 'input') {
-        inputOutput += ' '
-      }
-      render()
-      return
-    }
     if (event.key === '+' && state.page === 'learning' && state.teaching.item) { const item = getTeachingItem(state.teaching.category, state.teaching.section, state.teaching.item); if (item) void playCells(item.cells) }
     if (event.key === '+' && state.page === 'notes') void notes.readAloud('braille')
-    inputController.handleKey(event.key)
-    setInputSnapshot(inputController.snapshot())
+    controller.handleKey(event.key)
+    setInputSnapshot(controller.snapshot())
     render()
   }
 

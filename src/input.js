@@ -48,54 +48,170 @@ export function buildSyllable(buffers, withTone = true) {
   }
 }
 
-export function createInputController({ onCommit = null, onSpeech = null, onBackspace = null } = {}) {
-  let confirmedCells = []
+export function createInputController({ onCommit = null, onSpeech = null, onBackspace = null, onChange = null, mode = 'buffer', initialCells = [], initialCursor = 0, initialDocumentCells = [], initialDocumentCursor = 0 } = {}) {
+  const documentMode = mode === 'document'
+  const cloneAtom = atom => Array.isArray(atom)
+    ? atom.map(value => Array.isArray(value) ? [...value] : value)
+    : (atom && typeof atom === 'object' ? { ...atom } : atom)
+  const cloneCells = cells => (Array.isArray(cells) ? cells : []).map(cloneAtom)
+
+  let compositionCells = documentMode ? [] : cloneCells(initialCells)
+  let compositionCursor = documentMode ? 0 : Math.max(0, Math.min(Number(initialCursor) || 0, compositionCells.length))
+  let documentCells = documentMode ? cloneCells(initialDocumentCells) : []
+  let documentCursor = documentMode ? Math.max(0, Math.min(Number(initialDocumentCursor) || 0, documentCells.length)) : 0
   let currentDots = []
-  let cursorIndex = 0
 
   function snapshot() {
-    return {
-      confirmedCells: confirmedCells.map(cell => [...cell]),
-      currentDots: [...currentDots],
-      cursorIndex
+    if (documentMode) {
+      return {
+        confirmedCells: cloneCells(compositionCells),
+        currentDots: [...currentDots],
+        cursorIndex: compositionCursor,
+        compositionCells: cloneCells(compositionCells),
+        compositionCursor,
+        documentCells: cloneCells(documentCells),
+        documentCursor
+      }
     }
+    return {
+      confirmedCells: cloneCells(compositionCells),
+      currentDots: [...currentDots],
+      cursorIndex: compositionCursor
+    }
+  }
+
+  function notifyChange() {
+    if (documentMode) onChange?.(snapshot())
+  }
+
+  function resetComposition() {
+    compositionCells = []
+    compositionCursor = 0
+    currentDots = []
   }
 
   function clear() {
-    confirmedCells = []
+    if (documentMode) {
+      documentCells = []
+      documentCursor = 0
+      resetComposition()
+      notifyChange()
+      return
+    }
+    compositionCells = []
     currentDots = []
-    cursorIndex = 0
+    compositionCursor = 0
   }
 
-  function moveRight() {
-    cursorIndex = Math.min(cursorIndex + 1, confirmedCells.length)
+  function cancelComposition() {
+    if (!documentMode) return false
+    resetComposition()
+    notifyChange()
+    return true
   }
 
-  function moveLeft() {
-    cursorIndex = Math.max(cursorIndex - 1, 0)
+  function moveCompositionRight() {
+    compositionCursor = Math.min(compositionCursor + 1, compositionCells.length)
+    notifyChange()
+  }
+
+  function moveCompositionLeft() {
+    compositionCursor = Math.max(compositionCursor - 1, 0)
+    notifyChange()
+  }
+
+  function moveDocumentRight() {
+    documentCursor = Math.min(documentCursor + 1, documentCells.length)
+    notifyChange()
+  }
+
+  function moveDocumentLeft() {
+    documentCursor = Math.max(documentCursor - 1, 0)
+    notifyChange()
+  }
+
+  function confirmCompositionCell() {
+    const cell = [...currentDots]
+    if (compositionCursor < compositionCells.length) compositionCells[compositionCursor] = cell
+    else compositionCells.push(cell)
+    compositionCursor += 1
+    currentDots = []
+    notifyChange()
+    return true
   }
 
   function confirmCell() {
-    if (currentDots.length === 0) {
-      moveRight()
+    if (currentDots.length > 0) return confirmCompositionCell()
+    if (documentMode && compositionCells.length === 0) {
+      moveDocumentRight()
       return true
     }
-    const cell = [...currentDots]
-    if (cursorIndex < confirmedCells.length) confirmedCells[cursorIndex] = cell
-    else confirmedCells.push(cell)
-    cursorIndex += 1
-    currentDots = []
+    if (compositionCells.length > 0) {
+      moveCompositionRight()
+      return true
+    }
+    moveCompositionRight()
     return true
   }
 
   function commit() {
-    const cells = confirmedCells.map(cell => [...cell])
+    if (documentMode) {
+      if (currentDots.length > 0) confirmCompositionCell()
+      if (compositionCells.length === 0) return true
+      documentCells.splice(documentCursor, 0, cloneCells(compositionCells))
+      documentCursor += 1
+      resetComposition()
+      notifyChange()
+      return true
+    }
+    const cells = cloneCells(compositionCells)
     if (currentDots.length > 0) {
-      if (cursorIndex < cells.length) cells[cursorIndex] = [...currentDots]
+      if (compositionCursor < cells.length) cells[compositionCursor] = [...currentDots]
       else cells.push([...currentDots])
     }
     clear()
     onCommit?.(cells)
+    return true
+  }
+
+  function deleteBackward() {
+    if (currentDots.length > 0) {
+      currentDots = []
+      notifyChange()
+      return true
+    }
+    if (documentMode) {
+      if (compositionCells.length > 0 && compositionCursor > 0) {
+        compositionCells.splice(compositionCursor - 1, 1)
+        compositionCursor -= 1
+        notifyChange()
+        return true
+      }
+      if (documentCursor > 0) {
+        documentCells.splice(documentCursor - 1, 1)
+        documentCursor -= 1
+        notifyChange()
+      }
+      return true
+    }
+    if (compositionCursor > 0 && compositionCells.length > 0) {
+      compositionCells.splice(compositionCursor - 1, 1)
+      compositionCursor -= 1
+    } else if (compositionCells.length > 0) {
+      compositionCells.pop()
+      compositionCursor = compositionCells.length
+    } else {
+      onBackspace?.()
+    }
+    return true
+  }
+
+  function insertSpace() {
+    if (!documentMode) return false
+    if (compositionCells.length > 0 || currentDots.length > 0) commit()
+    documentCells.splice(documentCursor, 0, null)
+    documentCursor += 1
+    notifyChange()
     return true
   }
 
@@ -105,28 +221,25 @@ export function createInputController({ onCommit = null, onSpeech = null, onBack
     if (point !== null) {
       if (!currentDots.includes(point)) currentDots.push(point)
       currentDots.sort((a, b) => a - b)
+      notifyChange()
       return true
     }
-    if (key === '*') return confirmCell()
+    if (key === '*') {
+      if (currentDots.length > 0 || compositionCells.length > 0) return confirmCell()
+      if (documentMode) { moveDocumentRight(); return true }
+      return confirmCell()
+    }
     if (key === '/') {
-      if (currentDots.length > 0) currentDots = []
-      else moveLeft()
+      if (currentDots.length > 0) {
+        currentDots = []
+        notifyChange()
+      } else if (documentMode && compositionCells.length === 0) moveDocumentLeft()
+      else moveCompositionLeft()
       return true
     }
     if (key === '0') return commit()
-    if (key === '3') {
-      if (currentDots.length > 0) currentDots = []
-      else if (cursorIndex > 0 && confirmedCells.length > 0) {
-        confirmedCells.splice(cursorIndex - 1, 1)
-        cursorIndex -= 1
-      } else if (confirmedCells.length > 0) {
-        confirmedCells.pop()
-        cursorIndex = confirmedCells.length
-      } else {
-        onBackspace?.()
-      }
-      return true
-    }
+    if (key === '3') return deleteBackward()
+    if (key === '.') return insertSpace()
     if (key === '-') {
       clear()
       return true
@@ -134,5 +247,14 @@ export function createInputController({ onCommit = null, onSpeech = null, onBack
     return false
   }
 
-  return { handleKey, snapshot, clear, commit, backspace: () => handleKey('3') }
+  function setDocument(cells = [], cursor = cells.length) {
+    if (!documentMode) return false
+    documentCells = cloneCells(cells)
+    documentCursor = Math.max(0, Math.min(Number(cursor) || 0, documentCells.length))
+    resetComposition()
+    notifyChange()
+    return true
+  }
+
+  return { handleKey, snapshot, clear, cancelComposition, setDocument, commit, backspace: () => handleKey('3') }
 }
