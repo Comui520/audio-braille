@@ -9,7 +9,7 @@ export function createAppState() {
     learningTab: 'teaching',
     experimentTab: 'recognition',
     teaching: { category: null, section: null, item: null, phase: 'learn' },
-    input: { confirmedCells: [], currentDots: [] },
+    input: { confirmedCells: [], currentDots: [], cursorIndex: 0 },
     experiment: { mode: 'letters', stage: 'idle', trials: [], index: 0 },
     audioUnlocked: false
   }

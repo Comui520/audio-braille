@@ -282,7 +282,8 @@ export function initApp() {
   function setInputSnapshot(snapshot) {
     state = { ...state, input: {
       confirmedCells: snapshot.confirmedCells.map(cell => [...cell]),
-      currentDots: [...snapshot.currentDots]
+      currentDots: [...snapshot.currentDots],
+      cursorIndex: snapshot.cursorIndex
     } }
   }
 
