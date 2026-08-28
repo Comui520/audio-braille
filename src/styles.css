@@ -177,6 +177,7 @@ kbd { display: inline-block; min-width: 1.7em; padding: .12em .35em; border: 1px
   background: var(--surface);
 }
 .input-cell.is-current { border-color: var(--brand); box-shadow: 0 0 0 3px #dbe6ff; }
+.input-cell.is-cursor { border-style: dashed; border-color: var(--brand); }
 .input-cell.is-confirmed { border-color: var(--success); }
 .input-dot {
   width: 24px;

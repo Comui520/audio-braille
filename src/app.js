@@ -7,7 +7,7 @@ import { createProgressStore } from './curriculum.js'
 import { getTeachingCategories, getTeachingSections, getTeachingItems, getTeachingItem, markTeachingLearned, buildItemSpeech } from './teaching.js'
 import { buildTeachingSpeech } from './teaching-speech.js'
 import { createExperimentModel, buildShowcase, buildShowcaseInstruction } from './experiment.js'
-import { createReader, SAMPLE_TEXT } from './reader.js'
+import { createReader, SAMPLE_BRAILLE } from './reader.js'
 import { initNotes } from './notes.js'
 import { playAudioBraille, buildCellSequence, unlockAudio } from './audio-braille.js'
 import { speak, speakAndWait, cancelSpeech } from './speech.js'
@@ -31,9 +31,12 @@ export function buildHomeActions() {
   return [
     { action: 'learning', icon: '学', label: '学习盲文' },
     { action: 'experiment', icon: '听', label: 'AudioBraille 实验' },
-    { action: 'notes', icon: '记', label: '笔记' },
-    { action: 'guide', icon: '?', label: '使用说明' }
+    { action: 'notes', icon: '记', label: '笔记' }
   ]
+}
+
+export function appendSpace(existing = '') {
+  return `${existing} `
 }
 
 export function appendCommittedBraille(existing, cells) {
@@ -64,9 +67,9 @@ function diagramHtml(cells) {
   }).join('')}</span>`
 }
 
-function inputDisplayHtml(confirmedCells, currentDots, label = '当前输入') {
-  const models = buildInputDisplayModel(confirmedCells, currentDots)
-  return `<div class="input-display" aria-label="${label}">${models.map((model, index) => `<div class="input-cell ${model.kind === 'current' ? 'is-current' : 'is-confirmed'}" aria-label="${model.kind === 'current' ? '当前方' : `已确认第 ${index + 1} 方`}">${model.dots.map((on, dot) => `<i class="input-dot${on ? ' is-on' : ''}" data-dot="${dot + 1}"></i>`).join('')}</div>`).join('<span class="cell-separator" aria-hidden="true">；</span>')}</div>`
+function inputDisplayHtml(confirmedCells, currentDots, cursorIndex, label = '当前输入') {
+  const models = buildInputDisplayModel(confirmedCells, currentDots, cursorIndex)
+  return `<div class="input-display" aria-label="${label}">${models.map((model, index) => `<div class="input-cell ${model.kind === 'current' ? 'is-current' : 'is-confirmed'}${model.cursor ? ' is-cursor' : ''}" aria-label="${model.kind === 'current' ? '当前方' : `已确认第 ${index + 1} 方`}">${model.dots.map((on, dot) => `<i class="input-dot${on ? ' is-on' : ''}" data-dot="${dot + 1}"></i>`).join('')}</div>`).join('<span class="cell-separator" aria-hidden="true">；</span>')}</div>`
 }
 export function initApp() {
   applyTheme()
@@ -82,7 +85,7 @@ export function initApp() {
   let noteText = ''
   let inputOutput = ''
   let progressCache = {}
-  let currentReaderText = SAMPLE_TEXT
+  let currentReaderText = SAMPLE_BRAILLE
   let experimentToken = 0
   let gateOpen = false
 
@@ -120,7 +123,7 @@ export function initApp() {
           <button class="button button-quiet" data-action="speak-guide">朗读说明</button>
         </div>
       </details>
-      <div class="home-actions">${buildHomeActions().map(item => `<button class="home-action" data-action="${item.action}"><span class="action-icon">${item.icon}</span><span>${item.label}</span><small>${item.action === 'experiment' ? '听觉辨识与听书场景' : item.action === 'learning' ? '从字母、拼音到数字和符号' : item.action === 'notes' ? '记录、导入、导出与朗读' : '键位和基本操作'}</small></button>`).join('')}</div>
+      <div class="home-actions">${buildHomeActions().map(item => `<button class="home-action" data-action="${item.action}"><span class="action-icon">${item.icon}</span><span>${item.label}</span><small>${item.action === 'experiment' ? '听觉辨识与听书场景' : item.action === 'learning' ? '从字母、拼音到数字和符号' : '记录、导入、导出与朗读'}</small></button>`).join('')}</div>
     </section>`
   }
 
@@ -166,12 +169,12 @@ export function initApp() {
         <div class="lesson-actions"><button class="button button-primary" data-action="play-item">播放 AudioBraille</button><button class="button button-success" data-action="mark-learned">标记为已学</button></div>
       </div>
       <div class="phase-tabs"><button class="tab${teaching.phase === 'learn' ? ' is-active' : ''}" data-action="teaching-phase" data-phase="learn">学</button><button class="tab${teaching.phase === 'practice' ? ' is-active' : ''}" data-action="teaching-phase" data-phase="practice">练</button><button class="tab${teaching.phase === 'exam' ? ' is-active' : ''}" data-action="teaching-phase" data-phase="exam">考</button></div>
-      <div class="phase-panel">${practice ? `<p>${teaching.phase === 'practice' ? '请根据上方提示输入，按 0 提交。' : '不看答案，输入这个项目的盲文，按 0 提交。'}</p><div class="input-preview" id="learning-input-preview">${inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, '学习输入')}</div>` : `<p>${esc(buildItemSpeech(item, getLang()))}</p>`}</div>
+      <div class="phase-panel">${practice ? `<p>${teaching.phase === 'practice' ? '请根据上方提示输入，按 0 提交。' : '不看答案，输入这个项目的盲文，按 0 提交。'}</p><div class="input-preview" id="learning-input-preview">${inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, state.input.cursorIndex, '学习输入')}</div>` : `<p>${esc(buildItemSpeech(item, getLang()))}</p>`}</div>
       <div class="item-nav"><button class="button button-quiet" data-action="teaching-prev" ${index <= 0 ? 'disabled' : ''}>← 上一个</button><button class="button button-quiet" data-action="teaching-next" ${index >= items.length - 1 ? 'disabled' : ''}>下一个 →</button></div>`
   }
 
   function renderInput() {
-    return `<div class="tool-layout"><div class="tool-copy"><h2>在线输入</h2><p>用数字小键盘输入盲文。点位键只更新当前方，按 0 才会提交。</p><div class="key-row"><kbd>7</kbd><kbd>4</kbd><kbd>1</kbd><kbd>8</kbd><kbd>5</kbd><kbd>2</kbd></div></div><div class="input-tool">${inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, '在线输入盲文点位')}<div class="input-output" aria-live="polite">${esc(inputOutput || '等待输入')}</div><p class="helper">按 * 确认当前方，按 0 上屏</p></div></div>`
+    return `<div class="tool-layout"><div class="tool-copy"><h2>在线输入</h2><p>用数字小键盘输入盲文。点位键只更新当前方，按 0 才会提交。</p><div class="key-row"><kbd>7</kbd><kbd>4</kbd><kbd>1</kbd><kbd>8</kbd><kbd>5</kbd><kbd>2</kbd></div></div><div class="input-tool">${inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, state.input.cursorIndex, '在线输入盲文点位')}<div class="input-output" aria-live="polite">${esc(inputOutput || '等待输入')}</div><p class="helper">按 * 确认当前方，按 0 上屏</p></div></div>`
   }
 
   function renderExperiment() {
@@ -186,7 +189,7 @@ export function initApp() {
     if (model.stage === 'showcase') body += `<div class="experiment-status"><strong>展示阶段</strong><p>先听一次完整说明，随后依次播放六个声音。当前：<span id="showcase-current">准备开始</span></p><button class="button button-primary" data-action="experiment-confirm">我已听完展示，进入测试</button></div>`
     if (model.stage === 'listen' || model.stage === 'answer') {
       const trial = model.trials[model.index]
-      body += `<div class="experiment-status"><strong>第 ${model.index + 1} / ${model.trials.length} 题</strong><p>${model.stage === 'listen' ? '按 0 或点击按钮听音频。' : '输入听到的盲文方，按 0 提交。'}</p><button class="button button-primary" data-action="experiment-listen">${model.stage === 'listen' ? '播放本题音频' : '重听本题'}</button>${inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, '实验输入盲文点位')}</div>`
+      body += `<div class="experiment-status"><strong>第 ${model.index + 1} / ${model.trials.length} 题</strong><p>${model.stage === 'listen' ? '按 0 或点击按钮听音频。' : '输入听到的盲文方，按 0 提交。'}</p><button class="button button-primary" data-action="experiment-listen">${model.stage === 'listen' ? '播放本题音频' : '重听本题'}</button>${inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, state.input.cursorIndex, '实验输入盲文点位')}</div>`
       if (trial) body += `<p class="sr-only">本题需要 ${trial.cells.length} 方</p>`
     }
     if (model.stage === 'done') body += `<div class="experiment-status"><h2>本轮完成</h2><p>正确 ${model.results.filter(result => result.correct).length} / ${model.results.length}</p><button class="button button-primary" data-action="experiment-restart">再来一轮</button></div>`
@@ -194,7 +197,7 @@ export function initApp() {
   }
 
   function renderReader() {
-    return `<div class="reader-panel"><h2>听书场景</h2><p>这是 AudioBraille 的连续播放测试。输入盲文内容，或先使用内置短文。</p><textarea id="reader-text" rows="4">${esc(currentReaderText)}</textarea><label class="range-label">速度 <input id="reader-speed" type="range" min="0.5" max="5" step="0.5" value="${reader.getSpeed()}"><output>${reader.getSpeed()}x</output></label><div class="button-row"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-stop">停止</button></div><div id="reader-progress" aria-live="polite"></div></div>`
+    return `<div class="reader-panel"><h2>听书场景</h2><p>这里输入的是盲文。使用数字小键盘输入方，按 0 上屏；也可以修改下方盲文内容后播放。</p>${inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, state.input.cursorIndex, '听书输入盲文点位')}<textarea id="reader-text" rows="4" aria-label="盲文内容" readonly>${esc(currentReaderText)}</textarea><label class="range-label">速度 <input id="reader-speed" type="range" min="0.5" max="5" step="0.5" value="${reader.getSpeed()}"><output>${reader.getSpeed()}x</output></label><div class="button-row"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-stop">停止</button></div><div id="reader-progress" aria-live="polite"></div></div>`
   }
 
   function renderNotes() {
@@ -204,7 +207,7 @@ export function initApp() {
     if (textarea) {
       textarea.value = noteText
       textarea.textContent = noteText
-      textarea.insertAdjacentHTML('beforebegin', inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, '笔记输入盲文点位'))
+      textarea.insertAdjacentHTML('beforebegin', inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, state.input.cursorIndex, '笔记输入盲文点位'))
     }
     return `<section class="page page-notes"><div class="page-heading"><div><p class="eyebrow">NOTES</p><h1>笔记</h1><p class="lead">用盲文记录，也可以分别用文字或 AudioBraille 回听。</p></div></div>${legacy.innerHTML}</section>`
   }
@@ -234,6 +237,8 @@ export function initApp() {
       noteText = noteArea.value
       notes.updateReference?.()
     })
+    const readerText = document.querySelector('#reader-text')
+    readerText?.addEventListener('input', () => { currentReaderText = readerText.value })
     const importFile = document.querySelector('#note-import-file')
     importFile?.addEventListener('change', () => {
       const file = importFile.files?.[0]
@@ -262,7 +267,16 @@ export function initApp() {
 
   const inputController = createInputController({
     onCommit: onInputCommit,
-    onSpeech: text => speak(text)
+    onSpeech: text => speak(text),
+    onBackspace: () => {
+      if (state.page === 'notes') {
+        noteText = [...noteText].slice(0, -1).join('')
+      } else if (state.page === 'experiment' && state.experimentTab === 'reader') {
+        currentReaderText = [...currentReaderText].slice(0, -1).join('')
+      } else if (state.page === 'learning' && state.learningTab === 'input') {
+        inputOutput = [...inputOutput].slice(0, -1).join('')
+      }
+    }
   })
 
   function setInputSnapshot(snapshot) {
@@ -285,6 +299,8 @@ export function initApp() {
       speak(result.correct ? '正确' : `错误，正确答案是 ${experiment.snapshot().trials[experiment.snapshot().index - 1]?.label || ''}`)
     } else if (state.page === 'learning' && state.learningTab === 'input') {
       inputOutput += cellsToUnicode(cells)
+    } else if (state.page === 'experiment' && state.experimentTab === 'reader') {
+      currentReaderText = appendCommittedBraille(currentReaderText, cells)
     } else if (state.page === 'notes') {
       const textarea = document.querySelector('#note-textarea')
       if (textarea) {
@@ -345,7 +361,7 @@ export function initApp() {
       render()
     }
     else if (action === 'experiment-restart') { experiment.restart(); state = { ...state, input: { confirmedCells: [], currentDots: [] } } }
-    else if (action === 'reader-play') { currentReaderText = document.querySelector('#reader-text')?.value || SAMPLE_TEXT; reader.stop(); void reader.play(currentReaderText) }
+    else if (action === 'reader-play') { currentReaderText = document.querySelector('#reader-text')?.value || SAMPLE_BRAILLE; reader.stop(); void reader.play(currentReaderText) }
     else if (action === 'reader-stop') reader.stop()
     else if (action === 'notes-save') void notes.save()
     else if (action === 'notes-play-text') { noteText = document.querySelector('#note-textarea')?.value || ''; void notes.readAloud('tts') }
@@ -405,9 +421,11 @@ export function initApp() {
       if (state.page === 'notes') {
         const textarea = document.querySelector('#note-textarea')
         if (textarea) {
-          textarea.value += ' '
-          notes.updateReference?.()
+          noteText = appendSpace(textarea.value)
+          textarea.value = noteText
         }
+      } else if (state.page === 'experiment' && state.experimentTab === 'reader') {
+        currentReaderText = appendSpace(currentReaderText)
       } else if (state.page === 'learning' && state.learningTab === 'input') {
         inputOutput += ' '
       }

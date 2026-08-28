@@ -1,11 +1,11 @@
 // src/reader.js —— 听书：可调倍速 AudioBraille 朗读
 import { playAudioBraille } from './audio-braille.js'
-import { INITIALS, FINALS, TONES, syllableToDots } from './braille-engine.js'
+import { INITIALS, FINALS, syllableToDots, dotsToUnicode, unicodeToDots } from './braille-engine.js'
 
 // 内置示例短文（拼音音节串，空格分隔；数字/声调用数字后缀）
 export const SAMPLE_TEXT = 'ma ma he wo yi qi xue xi mang wen dian nao shi jie'
 
-// 拼音声母表（按长度降序，先匹配复声母）
+// 拼音或 Unicode 盲文 → 单方播放序列
 const INITIAL_LIST = ['zh', 'ch', 'sh', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h', 'j', 'q', 'x', 'r', 'z', 'c', 's']
 
 // 音节 → 点位序列（可选声调数字后缀，如 "ma1"）
@@ -31,8 +31,16 @@ export function syllableToDotsSeq(syllable) {
 
 // 整句（空格分隔音节串）→ 点位序列
 export function buildReadingDots(text) {
-  return String(text).trim().split(/\s+/).filter(Boolean).flatMap(w => syllableToDotsSeq(w))
+  const value = String(text).trim()
+  const braille = [...value].filter(ch => {
+    const code = ch.codePointAt(0)
+    return code >= 0x2800 && code <= 0x28ff
+  })
+  if (braille.length > 0) return braille.map(unicodeToDots)
+  return value.split(/\s+/).filter(Boolean).flatMap(w => syllableToDotsSeq(w))
 }
+
+export const SAMPLE_BRAILLE = buildReadingDots(SAMPLE_TEXT).map(dotsToUnicode).join('')
 
 // 速度限制（0.5x~5x）
 export function clampSpeed(x) {

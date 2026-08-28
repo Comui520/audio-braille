@@ -129,7 +129,7 @@ const MESSAGES = {
     expBStart: 'B 组开始。请听 AudioBraille 空间音频识别字母，用盲文点位作答。',
     expTrialA: (i) => `A 组第 ${i} 题，请打出字母`,
     expTrialB: (i) => `B 组第 ${i} 题，请听音频`,
-    expDone: (v) => `实验完成。语音组正确率 ${v.accuracy}%，AudioBraille 组正确率 ${v.accuracy2}%。语音组平均 ${v.time} 秒，AudioBraille 组平均 ${v.time2} 秒。`,
+    expDoneDual: (v) => `实验完成。语音组正确率 ${v.accuracy}%，AudioBraille 组正确率 ${v.accuracy2}%。语音组平均 ${v.time} 秒，AudioBraille 组平均 ${v.time2} 秒。`,
     // 笔记
     notesTitle: '笔记记录器',
     notesSave: '保存',
@@ -266,7 +266,7 @@ const MESSAGES = {
     expBStart: 'Group B starts. Listen to AudioBraille spatial audio to identify the letter, answer with braille dots.',
     expTrialA: (i) => `Group A trial ${i}, type the letter`,
     expTrialB: (i) => `Group B trial ${i}, listen to the audio`,
-    expDone: (v) => `Experiment done. Voice accuracy ${v.accuracy}%, AudioBraille accuracy ${v.accuracy2}%. Voice avg ${v.time}s, AudioBraille avg ${v.time2}s.`,
+    expDoneDual: (v) => `Experiment done. Voice accuracy ${v.accuracy}%, AudioBraille accuracy ${v.accuracy2}%. Voice avg ${v.time}s, AudioBraille avg ${v.time2}s.`,
     notesTitle: 'Notes',
     notesSave: 'Save',
     notesPlay: 'Playback',
