@@ -24,6 +24,12 @@ export function buildShowcase() {
   return SHOWCASE_DOTS.map((dots, i) => ({ dot: i + 1, dots, desc: pointDesc(i + 1) }))
 }
 
+export function buildShowcaseInstruction(lang = 'zh') {
+  if (lang === 'en') return 'Showcase starts. Dots 1, 2 and 3 use the left ear with sine waves; dots 4, 5 and 6 use the right ear with square waves. In each column, top, middle and bottom are high, mid and low pitch. The six sounds will now play in order.'
+  return '展示开始。点一、二、三使用左耳正弦波；点四、五、六使用右耳方波。每列从上到下分别是高音、中音、低音。现在按顺序播放六个声音。'
+}
+
+
 // 随机不重复字母
 export function pickLetters(n = 10) {
   return Object.keys(LATIN_LETTERS).sort(() => Math.random() - 0.5).slice(0, n)

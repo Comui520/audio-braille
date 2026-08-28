@@ -150,3 +150,49 @@ kbd { display: inline-block; min-width: 1.7em; padding: .12em .35em; border: 1px
   .phase-tabs { overflow-x: auto; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; } }
+
+/* ===== 共用输入方可视化 ===== */
+.input-display {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  min-height: 112px;
+  padding: 1rem;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+.input-cell {
+  position: relative;
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: repeat(2, 24px);
+  grid-template-rows: repeat(3, 24px);
+  grid-template-areas: "d1 d4" "d2 d5" "d3 d6";
+  gap: 8px;
+  padding: 13px 10px;
+  border: 2px solid #9ba5b2;
+  border-radius: 8px;
+  background: var(--surface);
+}
+.input-cell.is-current { border-color: var(--brand); box-shadow: 0 0 0 3px #dbe6ff; }
+.input-cell.is-confirmed { border-color: var(--success); }
+.input-dot {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #9ba5b2;
+  border-radius: 50%;
+  background: var(--surface);
+}
+.input-dot.is-on { border-color: var(--brand); background: var(--brand); }
+.input-cell.is-confirmed .input-dot.is-on { border-color: var(--success); background: var(--success); }
+.input-dot:nth-child(1) { grid-area: d1; }
+.input-dot:nth-child(2) { grid-area: d2; }
+.input-dot:nth-child(3) { grid-area: d3; }
+.input-dot:nth-child(4) { grid-area: d4; }
+.input-dot:nth-child(5) { grid-area: d5; }
+.input-dot:nth-child(6) { grid-area: d6; }
+.cell-separator { flex: 0 0 auto; color: var(--text-muted); font-weight: 800; }
+.input-preview { margin: 1rem 0; }
+.input-preview .input-display { justify-content: center; }

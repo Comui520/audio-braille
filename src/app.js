@@ -6,13 +6,14 @@ import { createInputController, keyToPoint } from './input.js'
 import { createProgressStore } from './curriculum.js'
 import { getTeachingCategories, getTeachingSections, getTeachingItems, getTeachingItem, markTeachingLearned, buildItemSpeech } from './teaching.js'
 import { buildTeachingSpeech } from './teaching-speech.js'
-import { createExperimentModel, buildShowcase } from './experiment.js'
+import { createExperimentModel, buildShowcase, buildShowcaseInstruction } from './experiment.js'
 import { createReader, SAMPLE_TEXT } from './reader.js'
 import { initNotes } from './notes.js'
 import { playAudioBraille, buildCellSequence, unlockAudio } from './audio-braille.js'
-import { speak, cancelSpeech } from './speech.js'
+import { speak, speakAndWait, cancelSpeech } from './speech.js'
 import { getLang, setLang, t } from './i18n.js'
 import { toCells, cellsToUnicode, cellsToDiagram, keyHintForCells } from './cells.js'
+import { buildInputDisplayModel } from './input-display.js'
 
 export { createAppState }
 export function buildPages() { return [...TOP_LEVEL_PAGES] }
@@ -33,6 +34,10 @@ export function buildHomeActions() {
     { action: 'notes', icon: '记', label: '笔记' },
     { action: 'guide', icon: '?', label: '使用说明' }
   ]
+}
+
+export function appendCommittedBraille(existing, cells) {
+  return `${existing || ''}${cellsToUnicode(cells)}`
 }
 
 const THEME = {
@@ -59,6 +64,10 @@ function diagramHtml(cells) {
   }).join('')}</span>`
 }
 
+function inputDisplayHtml(confirmedCells, currentDots, label = '当前输入') {
+  const models = buildInputDisplayModel(confirmedCells, currentDots)
+  return `<div class="input-display" aria-label="${label}">${models.map((model, index) => `<div class="input-cell ${model.kind === 'current' ? 'is-current' : 'is-confirmed'}" aria-label="${model.kind === 'current' ? '当前方' : `已确认第 ${index + 1} 方`}">${model.dots.map((on, dot) => `<i class="input-dot${on ? ' is-on' : ''}" data-dot="${dot + 1}"></i>`).join('')}</div>`).join('<span class="cell-separator" aria-hidden="true">；</span>')}</div>`
+}
 export function initApp() {
   applyTheme()
   let state = createAppState()
@@ -157,12 +166,12 @@ export function initApp() {
         <div class="lesson-actions"><button class="button button-primary" data-action="play-item">播放 AudioBraille</button><button class="button button-success" data-action="mark-learned">标记为已学</button></div>
       </div>
       <div class="phase-tabs"><button class="tab${teaching.phase === 'learn' ? ' is-active' : ''}" data-action="teaching-phase" data-phase="learn">学</button><button class="tab${teaching.phase === 'practice' ? ' is-active' : ''}" data-action="teaching-phase" data-phase="practice">练</button><button class="tab${teaching.phase === 'exam' ? ' is-active' : ''}" data-action="teaching-phase" data-phase="exam">考</button></div>
-      <div class="phase-panel">${practice ? `<p>${teaching.phase === 'practice' ? '请根据上方提示输入，按 0 提交。' : '不看答案，输入这个项目的盲文，按 0 提交。'}</p><div class="input-preview" id="learning-input-preview">${state.input.confirmedCells.map(cell => cellsToUnicode([cell])).join('')}${state.input.currentDots.length ? '…' : ''}</div>` : `<p>${esc(buildItemSpeech(item, getLang()))}</p>`}</div>
+      <div class="phase-panel">${practice ? `<p>${teaching.phase === 'practice' ? '请根据上方提示输入，按 0 提交。' : '不看答案，输入这个项目的盲文，按 0 提交。'}</p><div class="input-preview" id="learning-input-preview">${inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, '学习输入')}</div>` : `<p>${esc(buildItemSpeech(item, getLang()))}</p>`}</div>
       <div class="item-nav"><button class="button button-quiet" data-action="teaching-prev" ${index <= 0 ? 'disabled' : ''}>← 上一个</button><button class="button button-quiet" data-action="teaching-next" ${index >= items.length - 1 ? 'disabled' : ''}>下一个 →</button></div>`
   }
 
   function renderInput() {
-    return `<div class="tool-layout"><div class="tool-copy"><h2>在线输入</h2><p>用数字小键盘输入盲文。点位键只更新当前方，按 0 才会提交。</p><div class="key-row"><kbd>7</kbd><kbd>4</kbd><kbd>1</kbd><kbd>8</kbd><kbd>5</kbd><kbd>2</kbd></div></div><div class="input-tool"><div class="input-tool-current">${state.input.confirmedCells.map(cell => cellsToUnicode([cell])).join('')}<span>${state.input.currentDots.length ? '⠿' : ''}</span></div><div class="input-output" aria-live="polite">${esc(inputOutput || '等待输入')}</div><p class="helper">按 * 确认当前方，按 0 上屏</p></div></div>`
+    return `<div class="tool-layout"><div class="tool-copy"><h2>在线输入</h2><p>用数字小键盘输入盲文。点位键只更新当前方，按 0 才会提交。</p><div class="key-row"><kbd>7</kbd><kbd>4</kbd><kbd>1</kbd><kbd>8</kbd><kbd>5</kbd><kbd>2</kbd></div></div><div class="input-tool">${inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, '在线输入盲文点位')}<div class="input-output" aria-live="polite">${esc(inputOutput || '等待输入')}</div><p class="helper">按 * 确认当前方，按 0 上屏</p></div></div>`
   }
 
   function renderExperiment() {
@@ -174,10 +183,10 @@ export function initApp() {
     const modes = [['letters', '字母'], ['syllables', '拼音音节'], ['symbols', '符号'], ['digits', '数字']]
     let body = `<p>先选择一类，开始后会先展示左右耳和音高的对应关系。</p><div class="mode-picker">${modes.map(([id, label]) => `<button class="mode-chip${model.mode === id ? ' is-active' : ''}" data-action="experiment-mode" data-mode="${id}">${label}</button>`).join('')}</div>`
     if (model.stage === 'idle') body += `<button class="button button-primary" data-action="experiment-start">开始一轮实验</button>`
-    if (model.stage === 'showcase') body += `<div class="experiment-status"><strong>展示阶段</strong><p>依次听点 1 到点 6，熟悉左/右耳和高/中/低音的对应关系。</p><button class="button button-primary" data-action="experiment-confirm">我已听完展示，进入测试</button></div>`
+    if (model.stage === 'showcase') body += `<div class="experiment-status"><strong>展示阶段</strong><p>先听一次完整说明，随后依次播放六个声音。当前：<span id="showcase-current">准备开始</span></p><button class="button button-primary" data-action="experiment-confirm">我已听完展示，进入测试</button></div>`
     if (model.stage === 'listen' || model.stage === 'answer') {
       const trial = model.trials[model.index]
-      body += `<div class="experiment-status"><strong>第 ${model.index + 1} / ${model.trials.length} 题</strong><p>${model.stage === 'listen' ? '按 0 或点击按钮听音频。' : '输入听到的盲文方，按 0 提交。'}</p><button class="button button-primary" data-action="experiment-listen">${model.stage === 'listen' ? '播放本题音频' : '重听本题'}</button><div class="input-preview">${state.input.confirmedCells.map(cell => cellsToUnicode([cell])).join('')}${state.input.currentDots.length ? '…' : ''}</div></div>`
+      body += `<div class="experiment-status"><strong>第 ${model.index + 1} / ${model.trials.length} 题</strong><p>${model.stage === 'listen' ? '按 0 或点击按钮听音频。' : '输入听到的盲文方，按 0 提交。'}</p><button class="button button-primary" data-action="experiment-listen">${model.stage === 'listen' ? '播放本题音频' : '重听本题'}</button>${inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, '实验输入盲文点位')}</div>`
       if (trial) body += `<p class="sr-only">本题需要 ${trial.cells.length} 方</p>`
     }
     if (model.stage === 'done') body += `<div class="experiment-status"><h2>本轮完成</h2><p>正确 ${model.results.filter(result => result.correct).length} / ${model.results.length}</p><button class="button button-primary" data-action="experiment-restart">再来一轮</button></div>`
@@ -191,6 +200,12 @@ export function initApp() {
   function renderNotes() {
     const legacy = notes.view()
     legacy.querySelector('h1')?.remove()
+    const textarea = legacy.querySelector('#note-textarea')
+    if (textarea) {
+      textarea.value = noteText
+      textarea.textContent = noteText
+      textarea.insertAdjacentHTML('beforebegin', inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, '笔记输入盲文点位'))
+    }
     return `<section class="page page-notes"><div class="page-heading"><div><p class="eyebrow">NOTES</p><h1>笔记</h1><p class="lead">用盲文记录，也可以分别用文字或 AudioBraille 回听。</p></div></div>${legacy.innerHTML}</section>`
   }
 
@@ -245,10 +260,46 @@ export function initApp() {
     if (correct && state.teaching.phase === 'practice') render()
   }
 
+  const inputController = createInputController({
+    onCommit: onInputCommit,
+    onSpeech: text => speak(text)
+  })
+
+  function setInputSnapshot(snapshot) {
+    state = { ...state, input: {
+      confirmedCells: snapshot.confirmedCells.map(cell => [...cell]),
+      currentDots: [...snapshot.currentDots]
+    } }
+  }
+
+  function resetInput() {
+    inputController.clear()
+    setInputSnapshot(inputController.snapshot())
+  }
+
+  function onInputCommit(cells) {
+    if (state.page === 'learning' && state.learningTab === 'teaching' && state.teaching.item) {
+      void commitLearning(cells)
+    } else if (state.page === 'experiment' && experiment.snapshot().stage === 'answer') {
+      const result = experiment.submit(cells)
+      speak(result.correct ? '正确' : `错误，正确答案是 ${experiment.snapshot().trials[experiment.snapshot().index - 1]?.label || ''}`)
+    } else if (state.page === 'learning' && state.learningTab === 'input') {
+      inputOutput += cellsToUnicode(cells)
+    } else if (state.page === 'notes') {
+      const textarea = document.querySelector('#note-textarea')
+      if (textarea) {
+        textarea.value = appendCommittedBraille(textarea.value, cells)
+        noteText = textarea.value
+        notes.updateReference?.()
+      }
+    }
+  }
+
   function onAction(event) {
     const target = event.target.closest('[data-action]')
     if (!target) return
     const action = target.dataset.action
+    if (TOP_LEVEL_PAGES.includes(action) || action === 'learning' || action === 'experiment' || action === 'notes' || action.startsWith('teaching-') || action === 'experiment-mode' || action === 'experiment-restart') resetInput()
     if (action === 'home') state = { ...state, page: 'home' }
     else if (action === 'learning') state = { ...state, page: 'learning', learningTab: 'teaching' }
     else if (action === 'experiment') state = { ...state, page: 'experiment' }
@@ -261,11 +312,6 @@ export function initApp() {
       render()
     }
     else if (action === 'speak-guide') speak('小键盘七、四、一对应盲文点一、二、三；八、五、二对应点四、五、六。零提交，星号下一方，斜杠上一方，三退格，减号清空，加号朗读，句号空格。')
-    else if (action === 'toggle-language') {
-      const next = getLang() === 'en' ? 'zh' : 'en'
-      setLang(next)
-      cancelSpeech()
-    }
     else if (action === 'learning-tab') state = { ...state, learningTab: target.dataset.tab }
     else if (action === 'experiment-tab') { experimentToken++; reader.stop(); cancelSpeech(); state = { ...state, experimentTab: target.dataset.tab } }
     else if (action === 'teaching-home') state = { ...state, teaching: { ...state.teaching, category: null, section: null, item: null } }
@@ -291,7 +337,7 @@ export function initApp() {
       state = { ...state, teaching: { ...state.teaching, item: next.current || state.teaching.item } }
     } else if (action === 'experiment-mode') { experimentToken++; cancelSpeech(); experiment.selectMode(target.dataset.mode); state = { ...state, input: { confirmedCells: [], currentDots: [] } } }
     else if (action === 'experiment-start') { experiment.start(); state = { ...state, input: { confirmedCells: [], currentDots: [] } }; void playShowcase() }
-    else if (action === 'experiment-confirm') { experiment.confirmShowcase(); render() }
+    else if (action === 'experiment-confirm') { experimentToken++; cancelSpeech(); experiment.confirmShowcase(); render() }
     else if (action === 'experiment-listen') {
       const current = experiment.snapshot().trials[experiment.snapshot().index]
       if (current) void playCells(current.cells)
@@ -313,12 +359,18 @@ export function initApp() {
 
   async function playShowcase() {
     const token = ++experimentToken
+    // 只播报一次总说明；逐点阶段不再调用 TTS，避免浏览器语音与下一项重叠。
+    await speakAndWait(buildShowcaseInstruction(getLang()))
+    if (token !== experimentToken) return
     for (const point of buildShowcase()) {
       if (token !== experimentToken) return
-      await playAudioBraille(point.dots, { duration: 0.35 })
-      speak(point.desc)
-      await new Promise(resolve => setTimeout(resolve, 400))
+      const current = document.querySelector('#showcase-current')
+      if (current) current.textContent = point.desc
+      await playAudioBraille(point.dots, { duration: 0.55 })
+      await new Promise(resolve => setTimeout(resolve, 180))
     }
+    const current = document.querySelector('#showcase-current')
+    if (current) current.textContent = '展示完成'
   }
 
   function onKeydown(event) {
@@ -328,10 +380,8 @@ export function initApp() {
     const point = keyToPoint(event.key)
     if (point !== null) {
       event.preventDefault()
-      const dots = [...state.input.currentDots]
-      if (!dots.includes(point)) dots.push(point)
-      dots.sort((a, b) => a - b)
-      state = { ...state, input: { ...state.input, currentDots: dots } }
+      inputController.handleKey(event.key)
+      setInputSnapshot(inputController.snapshot())
       render()
       return
     }
@@ -364,33 +414,10 @@ export function initApp() {
       render()
       return
     }
-    const controller = createInputController({ onCommit: cells => {
-      if (state.page === 'learning' && state.learningTab === 'teaching' && state.teaching.item) void commitLearning(cells)
-      else if (state.page === 'experiment' && experiment.snapshot().stage === 'answer') {
-        const result = experiment.submit(cells)
-        if (!result.correct) speak(`错误，正确答案是 ${experiment.snapshot().trials[experiment.snapshot().index - 1]?.label || ''}`)
-        else speak('正确')
-      } else if (state.page === 'learning' && state.learningTab === 'input') {
-        inputOutput += cellsToUnicode(cells)
-      } else if (state.page === 'notes') {
-        const textarea = document.querySelector('#note-textarea')
-        if (textarea) {
-          textarea.value += cellsToUnicode(cells)
-          notes.updateReference?.()
-        }
-      }
-    }, onSpeech: text => speak(text) })
-    const pointKeys = { 1: '7', 2: '4', 3: '1', 4: '8', 5: '5', 6: '2' }
-    for (const cell of state.input.confirmedCells) {
-      for (const dot of cell) controller.handleKey(pointKeys[dot])
-      controller.handleKey('*')
-    }
-    for (const dot of state.input.currentDots) controller.handleKey(pointKeys[dot])
-    controller.handleKey(event.key)
-    const next = controller.snapshot()
-    state = { ...state, input: next }
     if (event.key === '+' && state.page === 'learning' && state.teaching.item) { const item = getTeachingItem(state.teaching.category, state.teaching.section, state.teaching.item); if (item) void playCells(item.cells) }
     if (event.key === '+' && state.page === 'notes') void notes.readAloud('braille')
+    inputController.handleKey(event.key)
+    setInputSnapshot(inputController.snapshot())
     render()
   }
 

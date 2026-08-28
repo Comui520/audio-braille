@@ -1,19 +1,18 @@
 // tests/experiment-v5.test.js
 import { describe, it, expect } from 'vitest'
-import { SHOWCASE_DOTS, buildShowcase, pickLetters, pickSymbols, buildTrials, gradeDots } from '../src/experiment.js'
+import { SHOWCASE_DOTS, buildShowcase, buildShowcaseInstruction, pickLetters, pickSymbols, buildTrials, gradeDots } from '../src/experiment.js'
 
 describe('AudioBraille 展示环节（v5）', () => {
   it('SHOWCASE_DOTS：左列1/2/3 + 右列4/5/6', () => {
     expect(SHOWCASE_DOTS).toEqual([[1], [2], [3], [4], [5], [6]])
   })
-  it('buildShowcase 生成 6 个点的描述（左右耳/音高）', () => {
-    const s = buildShowcase()
-    expect(s).toHaveLength(6)
-    expect(s[0].dot).toBe(1)
-    expect(s[0].desc).toContain('左')
-    expect(s[3].dot).toBe(4)
-    expect(s[3].desc).toContain('右')
+  it('总说明一次覆盖六点规则，逐点阶段不需要额外播报', () => {
+    const text = buildShowcaseInstruction('zh')
+    expect(text).toContain('点一、二、三')
+    expect(text).toContain('点四、五、六')
+    expect(text).toContain('六个声音')
   })
+
   it('point desc：点1左耳高音，点5右耳中音', () => {
     const s = buildShowcase()
     expect(s[0].desc).toContain('高音')
