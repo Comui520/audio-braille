@@ -11,6 +11,7 @@ import { LATIN_LETTERS, latinToDots } from './braille-engine.js'
 import { INITIALS, FINALS, TONES, syllableToDots } from './braille-engine.js'
 import { SYMBOLS_CN, SYMBOLS_EN } from './data/symbols.js'
 import { toCells, gradeCells } from './cells.js'
+import { buildRecognitionBank, sampleRecognitionTrials } from './experiment-bank.js'
 
 // ===== 展示环节（先听左右声道对应关系）=====
 export const SHOWCASE_DOTS = [[1], [2], [3], [4], [5], [6]]
@@ -59,20 +60,13 @@ export function pickSymbols(n = 10, lang = 'zh') {
 const DIGIT_LETTER = { '1': 'a', '2': 'b', '3': 'c', '4': 'd', '5': 'e', '6': 'f', '7': 'g', '8': 'h', '9': 'i', '0': 'j' }
 function digitDots(d) { return [[3, 4, 5, 6], latinToDots(DIGIT_LETTER[d])] }
 
-// 构建四类辨识题（v7：统一用 cells）
-export function buildTrials(mode, n = 10, lang = 'zh') {
-  if (mode === 'letters') return pickLetters(n).map(letter => ({ kind: 'letter', label: letter, cells: toCells(latinToDots(letter)) }))
-  if (mode === 'syllables') return pickSyllables(n).map(s => ({
-    kind: 'syllable', label: `${s.initial}${s.final}${TONE_NAMES_EXT[s.tone]}`, initial: s.initial, final: s.final, tone: s.tone,
-    cells: toCells(syllableToDots(s.initial, s.final, s.tone))
+export function buildTrials(mode, n = 10, lang = 'zh', options = {}) {
+  const bank = buildRecognitionBank(lang)[mode] || []
+  const seed = options.seed || `${mode}-${Math.random()}`
+  return sampleRecognitionTrials(bank, n, seed).map(item => ({
+    ...item,
+    kind: mode === 'syllables' ? 'syllable' : mode === 'letters' ? 'letter' : mode === 'symbols' ? 'symbol' : 'digit'
   }))
-  if (mode === 'symbols') {
-    const table = lang === 'en' ? SYMBOLS_EN : SYMBOLS_CN
-    return pickSymbols(n, lang).map(ch => ({ kind: 'symbol', label: ch, cells: toCells(table[ch]) }))
-  }
-  // digits
-  const digits = Object.keys(DIGIT_LETTER)
-  return digits.sort(() => Math.random() - 0.5).slice(0, n).map(d => ({ kind: 'digit', label: d, cells: toCells(digitDots(d)) }))
 }
 
 // ===== 点位比较（v7：转发到 cells.gradeCells，唯一权威）=====
@@ -153,9 +147,9 @@ export function createExperimentModel({ trialCount = 10, lang = 'zh' } = {}) {
     return snapshot()
   }
 
-  function start(nextMode = mode) {
+  function start(nextMode = mode, options = {}) {
     if (modes.includes(nextMode)) mode = nextMode
-    trials = buildTrials(mode, trialCount, lang)
+    trials = buildTrials(mode, trialCount, lang, options)
     index = 0
     results = []
     stage = 'showcase'
