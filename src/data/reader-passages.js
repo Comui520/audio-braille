@@ -1,4 +1,38 @@
+import { INITIALS, FINALS, syllableToDots } from '../braille-engine.js'
+
 export const READER_BANK_VERSION = 'reader-v13-1'
+
+const INITIAL_LIST = ['zh', 'ch', 'sh', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h', 'j', 'q', 'x', 'r', 'z', 'c', 's']
+const ZERO_INITIAL_ALIASES = {
+  yi: ['', 'i'], wu: ['', 'u'], yu: ['', 'ü'], yuan: ['', 'üan'], yue: ['', 'üe'], yun: ['', 'ün'],
+  ya: ['', 'ia'], ye: ['', 'ie'], yao: ['', 'iao'], you: ['', 'iu'], yan: ['', 'ian'], yin: ['', 'in'],
+  yang: ['', 'iang'], ying: ['', 'ing'], yong: ['', 'iong'], wa: ['', 'ua'], wo: ['', 'uo'], wai: ['', 'uai'],
+  wei: ['', 'ui'], wan: ['', 'uan'], wen: ['', 'un'], wang: ['', 'uang'], weng: ['', 'eng']
+}
+const JQX_UMAP = { ju: 'ü', jue: 'üe', juan: 'üan', jun: 'ün', qu: 'ü', que: 'üe', quan: 'üan', qun: 'ün', xu: 'ü', xue: 'üe', xuan: 'üan', xun: 'ün' }
+
+function parsePinyinToken(token) {
+  const match = String(token).match(/^([a-z]+)([1-5])?$/)
+  if (!match) return null
+  const body = match[1]
+  const tone = match[2] === '5' ? null : match[2] || null
+  if (ZERO_INITIAL_ALIASES[body]) {
+    const [initial, final] = ZERO_INITIAL_ALIASES[body]
+    return { initial, final, tone }
+  }
+  const initial = INITIAL_LIST.find(candidate => body.startsWith(candidate) && body.length > candidate.length) || ''
+  let final = initial ? body.slice(initial.length) : body
+  if (JQX_UMAP[body] && ['j', 'q', 'x'].includes(initial)) final = JQX_UMAP[body]
+  if (!FINALS[final]) return null
+  return { initial, final, tone }
+}
+
+function pinyinToCells(pinyin) {
+  const tokens = String(pinyin).trim().split(/\s+/).filter(Boolean)
+  const parsed = tokens.map(parsePinyinToken)
+  if (parsed.some(value => !value)) return null
+  return parsed.flatMap(({ initial, final, tone }) => syllableToDots(initial, final, tone).map(cell => [...cell]))
+}
 
 const PASSAGE_SEEDS = [
   ['日常出行', '一位学生在早晨整理书包，准备乘车去学校。', 'yi1 wei4 xue2 sheng1 zai4 zao3 chen2 zheng3 li3 shu1 bao1 zhun3 bei4 cheng2 che1 qu4 xue2 xiao4', 'daily', 'low'],
@@ -31,24 +65,31 @@ const PASSAGE_SEEDS = [
   ['计划项目', '项目负责人把大任务分成小步骤，每周检查一次进度。', 'xiang4 mu4 fu4 ze2 ren2 ba3 da4 ren4 wu4 fen1 cheng2 xiao3 bu4 zhou4 mei3 zhou1 jian3 cha2 yi1 ci4 jin4 du4', 'work', 'medium'],
   ['回复消息', '工作结束后，他整理当天的消息，并回复需要处理的事项。', 'gong1 zuo4 jie2 shu4 hou4 ta1 zheng3 li3 dang1 tian1 de5 xiao1 xi5 bing4 hui2 fu4 xu1 yao4 chu3 li3 de5 shi4 xiang4', 'work', 'low'],
   ['安全提醒', '进入工作区域前，请先阅读提示并确认通道没有障碍物。', 'jin4 ru4 gong1 zuo4 qu1 yu4 qian2 qing3 xian1 yue4 du2 ti2 shi4 bing4 que4 ren4 tong1 dao4 mei2 you3 zhang4 ai4 wu4', 'work', 'medium'],
-  ['分享经验', '同事在午后分享工作经验，大家把有用的方法记下来。', 'tong2 shi4 zai4 wu3 hou4 fen1 xiang3 gong1 zuo4 jing1 yan4 da4 jia1 ba3 you3 yong4 de5 fang1 fa3 ji4 xia4 lai2', 'work', 'low']
+  ['分享经验', '同事在午后分享工作经验，大家把有用的方法记下来。', 'tong2 shi4 zai4 wu3 hou4 fen1 xiang3 gong1 zuo4 jing1 yan4 da4 jia1 ba3 you3 yong4 de5 fang1 fa3 ji4 xia4 lai2', 'work', 'low'],
+  ['完整安排', '在开始一项长期工作之前，团队会讨论目标、分工、时间安排、检查方式和遇到问题时的应对办法。', 'zai4 kai1 shi3 yi1 xiang4 chang2 qi1 gong1 zuo4 zhi1 qian2 tuan2 dui4 hui4 tao3 lun4 mu4 biao1 fen1 gong1 shi2 jian1 an1 pai2 jian3 cha2 fang1 shi4 he2 yu4 dao4 wen4 ti2 shi2 de5 ying4 dui4 ban4 fa3', 'work', 'high']
 ]
 
 function lengthStratum(text) {
   const length = [...text].length
-  return length < 24 ? 'short' : length < 38 ? 'medium' : 'long'
+  return length < 24 ? 'short' : length < 28 ? 'medium' : 'long'
 }
 
-export const READER_PASSAGES = PASSAGE_SEEDS.map(([title, text, pinyin, topicStratum, difficultyStratum], index) => ({
-  passageId: `reader-${String(index + 1).padStart(3, '0')}`,
-  passageVersion: READER_BANK_VERSION,
-  title,
-  text,
-  pinyin,
-  lengthStratum: lengthStratum(text),
-  topicStratum,
-  difficultyStratum
-}))
+export const READER_PASSAGES = PASSAGE_SEEDS.map(([title, text, pinyin, topicStratum, difficultyStratum], index) => {
+  const brailleCells = pinyinToCells(pinyin)
+  if (!brailleCells?.length) throw new Error(`Invalid reader passage pinyin: ${title}`)
+  return {
+    passageId: `reader-${String(index + 1).padStart(3, '0')}`,
+    passageVersion: READER_BANK_VERSION,
+    title,
+    text,
+    pinyin,
+    lengthStratum: lengthStratum(text),
+    topicStratum,
+    difficultyStratum,
+    brailleCells
+  }
+})
+
 
 function seededRandom(seed) {
   let value = 2166136261

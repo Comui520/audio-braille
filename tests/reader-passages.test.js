@@ -6,16 +6,16 @@ describe('听书材料库', () => {
   it('至少有30段稳定编号材料，长度分层', () => {
     expect(READER_PASSAGES.length).toBeGreaterThanOrEqual(30)
     expect(new Set(READER_PASSAGES.map(item => item.passageId)).size).toBe(READER_PASSAGES.length)
-    expect(new Set(READER_PASSAGES.map(item => item.lengthStratum)).size).toBeGreaterThan(1)
+    expect(new Set(READER_PASSAGES.map(item => item.lengthStratum)).size).toBe(3)
     expect(READER_PASSAGES.every(item => item.passageVersion === READER_BANK_VERSION)).toBe(true)
+    expect(READER_PASSAGES.every(item => Array.isArray(item.brailleCells) && item.brailleCells.length > 0)).toBe(true)
   })
 
   it('每段材料都能生成非空且不修改共享数据的 AudioBraille 方序列', () => {
-    const passage = READER_PASSAGES[0]
-    const sequence = buildPassageSequence(passage)
-    expect(sequence.length).toBeGreaterThan(0)
+    for (const passage of READER_PASSAGES) expect(buildPassageSequence(passage).length).toBeGreaterThan(0)
+    const sequence = buildPassageSequence(READER_PASSAGES[0])
     sequence[0].push(99)
-    expect(buildPassageSequence(passage)[0]).not.toContain(99)
+    expect(buildPassageSequence(READER_PASSAGES[0])[0]).not.toContain(99)
   })
 
   it('固定种子抽取3段并覆盖至少两个长度层级', () => {
@@ -30,6 +30,7 @@ describe('听书材料库', () => {
   it('听书结果记录是否听懂和概括文本', () => {
     expect(createReaderTrialRecord({ passageId: 'reader-001', selfReportedUnderstood: true, summaryText: '摘要' }))
       .toMatchObject({ passageId: 'reader-001', selfReportedUnderstood: true, summaryText: '摘要', summarySubmitted: true })
-    expect(createReaderTrialRecord({ passageId: 'reader-001', completed: false })).toMatchObject({ completed: false, summarySubmitted: false })
+    expect(createReaderTrialRecord({ passageId: 'reader-001', completed: false }))
+      .toMatchObject({ completed: false, summarySubmitted: false })
   })
 })

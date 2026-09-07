@@ -168,6 +168,7 @@ export function initApp() {
   let readerTrialRecord = null
   let readerPlayStartedAt = null
   let readerReplayCount = 0
+  let readerPlayToken = 0
   const reader = createReader({ onTick: (position, total) => {
     const el = document.querySelector('#reader-progress')
     if (el) el.textContent = `${position} / ${total}`
@@ -181,6 +182,7 @@ export function initApp() {
       playCompletedAt: Date.now(),
       playedDurationMs: readerPlayStartedAt ? Date.now() - readerPlayStartedAt : null,
       completed: true,
+      pauseCount: reader.snapshot().pauseCount,
       replayCount: readerReplayCount,
       playbackSpeed: reader.getSpeed()
     })
@@ -363,11 +365,13 @@ export function initApp() {
   }
 
   function renderReader() {
+    if (state.experiment.researchMode === 'formal' && state.experiment.formalPhase !== 'reader') return `<div class="reader-panel"><h2>听书场景</h2><p>完成统一训练、校准和听觉辨识后，才能进入正式听书。</p></div>`
     const input = state.input
     const composition = input.compositionCells || input.confirmedCells
     const compositionCursor = input.compositionCursor ?? input.cursorIndex
     const passageOptions = readerPassages.map(passage => `<option value="${passage.passageId}"${passage.passageId === selectedReaderPassage.passageId ? ' selected' : ''}>${esc(passage.title)} · ${passage.lengthStratum}</option>`).join('')
-    return `<div class="reader-panel"><h2>听书场景</h2><p>选择一段材料，播放完成后再填写理解反馈。</p><label>材料<select id="reader-passage" data-action="reader-passage">${passageOptions}</select></label><p class="reader-passage-meta">${esc(selectedReaderPassage.topicStratum)} · ${esc(selectedReaderPassage.difficultyStratum)}</p><p>${esc(selectedReaderPassage.text)}</p><div class="reader-input-preview">${inputDisplayHtml(composition, input.currentDots, compositionCursor, '当前多方输入')}</div>${buildTextareaDocumentHtml(currentReaderText, { id: 'reader-text', rows: 4, label: '盲文内容' })}<label class="range-label">速度 <input id="reader-speed" type="range" min="0.5" max="5" step="0.5" value="${reader.getSpeed()}"><output>${reader.getSpeed()}x</output></label><div class="button-row"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-stop">停止</button></div><div id="reader-progress" aria-live="polite"></div>${buildReaderComprehensionHtml({ completed: readerCompleted, understood: readerUnderstood, summaryText: readerSummary })}</div>`
+    const formalReader = state.experiment.researchMode === 'formal'
+    return `<div class="reader-panel"><h2>听书场景</h2><p>选择一段材料，播放完成后再填写理解反馈。</p>${formalReader ? `<label>材料<select id="reader-passage">${passageOptions}</select></label><p class="reader-passage-meta">${esc(selectedReaderPassage.topicStratum)} · ${esc(selectedReaderPassage.difficultyStratum)}</p><p>${esc(selectedReaderPassage.text)}</p>` : ''}<div class="reader-input-preview">${inputDisplayHtml(composition, input.currentDots, compositionCursor, '当前多方输入')}</div>${formalReader ? '' : buildTextareaDocumentHtml(currentReaderText, { id: 'reader-text', rows: 4, label: '盲文内容' })}<label class="range-label">速度 <input id="reader-speed" type="range" min="0.5" max="5" step="0.5" value="${reader.getSpeed()}"><output>${reader.getSpeed()}x</output></label><div class="button-row"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-pause">暂停</button><button class="button button-quiet" data-action="reader-resume">继续</button><button class="button button-quiet" data-action="reader-stop">停止</button></div><div id="reader-progress" aria-live="polite"></div>${buildReaderComprehensionHtml({ completed: readerCompleted, understood: readerUnderstood, summaryText: readerSummary })}</div>`
   }
 
   function renderNotes() {
@@ -438,6 +442,8 @@ export function initApp() {
     })
     const readerPassage = document.querySelector('#reader-passage')
     readerPassage?.addEventListener('change', () => {
+      reader.stop()
+      readerPlayToken += 1
       selectedReaderPassage = readerPassages.find(passage => passage.passageId === readerPassage.value) || readerPassages[0]
       readerCompleted = false
       readerUnderstood = null
@@ -477,6 +483,8 @@ export function initApp() {
       if (state.page === 'notes') {
         noteText = [...noteText].slice(0, -1).join('')
       } else if (state.page === 'experiment' && state.experimentTab === 'reader') {
+        reader.stop()
+        readerPlayToken += 1
         currentReaderText = [...currentReaderText].slice(0, -1).join('')
       } else if (state.page === 'learning' && state.learningTab === 'input') {
         inputOutput = [...inputOutput].slice(0, -1).join('')
@@ -569,8 +577,11 @@ export function initApp() {
   function onInputCommit(cells) {
     if (state.page === 'learning' && state.learningTab === 'teaching' && state.teaching.item) {
       void commitLearning(cells)
-    } else if (state.page === 'experiment' && experiment.snapshot().stage === 'answer') {
+    } else if (state.page === 'experiment' && state.experimentTab === 'recognition' && experiment.snapshot().stage === 'answer') {
       const result = experiment.submit(cells)
+      if (result.state?.stage === 'done' && state.experiment.researchMode === 'formal') {
+        state = { ...state, experiment: { ...state.experiment, formalPhase: 'reader' } }
+      }
       speak(result.correct ? '正确' : `错误，正确答案是 ${experiment.snapshot().trials[experiment.snapshot().index - 1]?.label || ''}`)
     } else if (state.page === 'learning' && state.learningTab === 'input') {
       inputOutput += cellsToUnicode(cells)
@@ -607,7 +618,7 @@ export function initApp() {
     }
     else if (action === 'speak-guide') speak('小键盘七、四、一对应盲文点一、二、三；八、五、二对应点四、五、六。零提交，星号下一方，斜杠上一方，三退格，减号清空，加号朗读，句号空格。')
     else if (action === 'learning-tab') state = { ...state, learningTab: target.dataset.tab }
-    else if (action === 'experiment-tab') { experimentToken++; reader.stop(); cancelSpeech(); state = { ...state, experimentTab: target.dataset.tab } }
+    else if (action === 'experiment-tab') { experimentToken++; reader.stop(); readerPlayToken += 1; cancelSpeech(); state = { ...state, experimentTab: target.dataset.tab } }
     else if (action === 'teaching-home') state = { ...state, teaching: { ...state.teaching, category: null, section: null, item: null, tone: null } }
     else if (action === 'teaching-category') state = { ...state, teaching: { ...state.teaching, category: target.dataset.category, section: null, item: null, tone: null } }
     else if (action === 'teaching-continue') {
@@ -655,8 +666,24 @@ export function initApp() {
       render()
     }
     else if (action === 'experiment-restart') { experiment.restart(); state = { ...state, input: { confirmedCells: [], currentDots: [] } } }
-    else if (action === 'reader-play') { readerCompleted = false; readerUnderstood = null; readerSummary = ''; readerTrialRecord = null; readerReplayCount = reader.snapshot().position > 0 ? readerReplayCount + 1 : 0; readerPlayStartedAt = Date.now(); reader.stop(); const playText = state.experiment.researchMode === 'formal' ? selectedReaderPassage.pinyin : (document.querySelector('#reader-text')?.value || SAMPLE_BRAILLE); currentReaderText = playText; void reader.play(playText) }
-    else if (action === 'reader-stop') reader.stop()
+    else if (action === 'reader-play') {
+      if (state.experiment.researchMode === 'formal' && state.experiment.formalPhase !== 'reader') return
+      readerCompleted = false
+      readerUnderstood = null
+      readerSummary = ''
+      readerTrialRecord = null
+      readerReplayCount = reader.snapshot().position > 0 ? readerReplayCount + 1 : 0
+      readerPlayStartedAt = Date.now()
+      reader.stop()
+      readerPlayToken += 1
+      const playToken = readerPlayToken
+      const playText = state.experiment.researchMode === 'formal' ? selectedReaderPassage.brailleCells : (document.querySelector('#reader-text')?.value || SAMPLE_BRAILLE)
+      currentReaderText = Array.isArray(playText) ? playText.map(dots => dotsToUnicode(dots)).join('') : playText
+      void reader.play(playText).then(() => { if (playToken !== readerPlayToken) readerCompleted = false })
+    }
+    else if (action === 'reader-stop') { reader.stop(); readerPlayToken += 1; readerCompleted = false; readerTrialRecord = null }
+    else if (action === 'reader-pause') reader.pause()
+    else if (action === 'reader-resume') reader.resume()
     else if (action === 'reader-understood') { readerUnderstood = true; if (readerTrialRecord) readerTrialRecord = { ...readerTrialRecord, selfReportedUnderstood: true }; render() }
     else if (action === 'reader-not-understood') { readerUnderstood = false; if (readerTrialRecord) readerTrialRecord = { ...readerTrialRecord, selfReportedUnderstood: false }; render() }
     else if (action === 'reader-summary-submit') { readerSummary = document.querySelector('#reader-summary')?.value || ''; if (readerTrialRecord) readerTrialRecord = { ...readerTrialRecord, summaryText: readerSummary, summarySubmitted: readerSummary.trim().length > 0 }; render() }
@@ -666,7 +693,7 @@ export function initApp() {
     else if (action === 'notes-export') void notes.exportNote('json')
     else if (action === 'notes-import') document.querySelector('#note-import-file')?.click()
     else if (action === 'notes-new') { notes.newNote(); loadEditorText('notes', '') }
-    else if (TOP_LEVEL_PAGES.includes(action)) { experimentToken++; reader.stop(); cancelSpeech(); state = { ...state, page: action, input: { confirmedCells: [], currentDots: [] } } }
+    else if (TOP_LEVEL_PAGES.includes(action)) { experimentToken++; reader.stop(); readerPlayToken += 1; cancelSpeech(); state = { ...state, page: action, input: { confirmedCells: [], currentDots: [] } } }
     render()
   }
 

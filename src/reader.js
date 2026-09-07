@@ -6,7 +6,8 @@ import { INITIALS, FINALS, syllableToDots, dotsToUnicode, unicodeToDots } from '
 export const SAMPLE_TEXT = 'ma ma he wo yi qi xue xi mang wen dian nao shi jie'
 
 export function buildPassageSequence(passage = {}) {
-  return buildReadingDots(passage.pinyin || passage.text || '').map(dots => [...dots])
+  const cells = Array.isArray(passage.brailleCells) ? passage.brailleCells : buildReadingDots(passage.pinyin || passage.text || '')
+  return cells.map(dots => [...dots])
 }
 
 export function createReaderTrialRecord({
@@ -77,6 +78,7 @@ export function buildReadingDots(text) {
   return value.split(/\s+/).filter(Boolean).flatMap(w => syllableToDotsSeq(w))
 }
 
+export const SAMPLE_BRAILLE = buildReadingDots(SAMPLE_TEXT).map(dotsToUnicode).join('')
 export function buildReaderComprehensionHtml({ completed = false, understood = null, summaryText = '' } = {}) {
   if (!completed) return '<p class="reader-comprehension-pending">播放完成后可填写理解反馈。</p>'
   const choices = `<div class="button-row"><button class="button button-success" data-action="reader-understood">听懂了</button><button class="button button-quiet" data-action="reader-not-understood">没听懂</button></div>`
@@ -100,31 +102,60 @@ export function clampSpeed(x) {
 export function createReader({ onTick = null, onComplete = null } = {}) {
   let speed = 1
   let playing = false
-  let stopFlag = false
+  let paused = false
+  let pauseCount = 0
+  let generation = 0
+  let resumeWaiters = []
   let position = 0
   let total = 0
+  function resumePaused() {
+    paused = false
+    const waiters = resumeWaiters
+    resumeWaiters = []
+    waiters.forEach(resolve => resolve())
+  }
   return {
     setSpeed(s) { speed = clampSpeed(s) },
     getSpeed() { return speed },
-    snapshot() { return { playing, speed, position, total } },
+    snapshot() { return { playing, paused, pauseCount, speed, position, total } },
     async play(text) {
       if (playing) return
+      const token = ++generation
       playing = true
-      stopFlag = false
+      paused = false
       position = 0
-      const seq = buildReadingDots(text)
+      const seq = Array.isArray(text) ? text.map(dots => [...dots]) : buildReadingDots(text)
       total = seq.length
-      for (let i = 0; i < seq.length; i++) {
-        if (stopFlag) break
+      for (let i = 0; i < seq.length; i += 1) {
+        if (token !== generation) return
+        if (paused) await new Promise(resolve => resumeWaiters.push(resolve))
+        if (token !== generation) return
         const dur = Math.max(0.05, 0.5 / speed)
         await playAudioBraille(seq[i], { duration: dur })
+        if (token !== generation) return
         position = i + 1
         onTick?.(position, total)
-        await new Promise(r => setTimeout(r, 100 / speed))
+        await new Promise(resolve => setTimeout(resolve, 100 / speed))
       }
+      if (token !== generation) return
       playing = false
       onComplete?.()
     },
-    stop() { stopFlag = true; playing = false }
+    pause() {
+      if (!playing || paused) return false
+      paused = true
+      pauseCount += 1
+      return true
+    },
+    resume() {
+      if (!paused) return false
+      resumePaused()
+      return true
+    },
+    stop() {
+      generation += 1
+      playing = false
+      resumePaused()
+    }
   }
 }
