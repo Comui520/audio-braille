@@ -7,11 +7,15 @@ export function createStorage() {
 
   function open() {
     return new Promise((resolve, reject) => {
-      const req = indexedDB.open('AudioBraille', 1)
+      const req = indexedDB.open('AudioBraille', 2)
       req.onupgradeneeded = () => {
         const d = req.result
         if (!d.objectStoreNames.contains('notes')) d.createObjectStore('notes', { keyPath: 'id' })
         if (!d.objectStoreNames.contains('progress')) d.createObjectStore('progress', { keyPath: 'key' })
+        if (!d.objectStoreNames.contains('experimentSessions')) d.createObjectStore('experimentSessions', { keyPath: 'sessionId' })
+        if (!d.objectStoreNames.contains('experimentTrials')) d.createObjectStore('experimentTrials', { keyPath: 'eventId' })
+        if (!d.objectStoreNames.contains('readerTrials')) d.createObjectStore('readerTrials', { keyPath: 'eventId' })
+        if (!d.objectStoreNames.contains('experimentUploads')) d.createObjectStore('experimentUploads', { keyPath: 'batchId' })
       }
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => reject(req.error)
@@ -33,13 +37,28 @@ export function createStorage() {
     async saveNote(note) { return tx('notes', 'readwrite', s => s.put(note)) },
     async deleteNote(id) { return tx('notes', 'readwrite', s => s.delete(id)) },
     async loadNotes() { return tx('notes', 'readonly', s => s.getAll()) },
-    async clearAll() { await tx('notes', 'readwrite', s => s.clear()); await tx('progress', 'readwrite', s => s.clear()) },
-
+    async clearAll() {
+      await tx('notes', 'readwrite', s => s.clear())
+      await tx('progress', 'readwrite', s => s.clear())
+      await tx('experimentSessions', 'readwrite', s => s.clear())
+      await tx('experimentTrials', 'readwrite', s => s.clear())
+      await tx('readerTrials', 'readwrite', s => s.clear())
+      await tx('experimentUploads', 'readwrite', s => s.clear())
+    },
     async saveProgress(progress) { return tx('progress', 'readwrite', s => s.put({ key: 'main', ...progress })) },
     async loadProgress() {
       const rec = await tx('progress', 'readonly', s => s.get('main'))
       return rec ?? {}
     },
+
+    async saveExperimentSession(session) { return tx('experimentSessions', 'readwrite', s => s.put(session)) },
+    async loadExperimentSessions() { return tx('experimentSessions', 'readonly', s => s.getAll()) },
+    async saveExperimentTrial(trial) { return tx('experimentTrials', 'readwrite', s => s.put(trial)) },
+    async loadExperimentTrials() { return tx('experimentTrials', 'readonly', s => s.getAll()) },
+    async saveReaderTrial(trial) { return tx('readerTrials', 'readwrite', s => s.put(trial)) },
+    async loadReaderTrials() { return tx('readerTrials', 'readonly', s => s.getAll()) },
+    async saveExperimentUpload(upload) { return tx('experimentUploads', 'readwrite', s => s.put(upload)) },
+    async loadExperimentUploads() { return tx('experimentUploads', 'readonly', s => s.getAll()) },
 
     // 导出：JSON（含元数据与版本号）；.brf 为盲文 ASCII 文本（点位用数字串，空格=空方）
     async exportNotes(format = 'json') {
