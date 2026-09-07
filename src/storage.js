@@ -24,13 +24,38 @@ export function createStorage() {
 
   function tx(store, mode, fn) {
     return new Promise((resolve, reject) => {
-      const t = db.transaction(store, mode)
-      const s = t.objectStore(store)
-      const req = fn(s)
-      t.oncomplete = () => resolve(req?.result)
-      t.onerror = () => reject(t.error)
+      let transaction
+      let request
+      try {
+        transaction = db.transaction(store, mode)
+        request = fn(transaction.objectStore(store))
+      } catch (error) {
+        reject(error)
+        return
+      }
+      transaction.oncomplete = () => resolve(request?.result)
+      transaction.onerror = () => reject(transaction.error)
+      transaction.onabort = () => reject(transaction.error || new Error('transaction-aborted'))
     })
   }
+
+  function multiTx(stores, mode, fn) {
+    return new Promise((resolve, reject) => {
+      let transaction
+      try {
+        transaction = db.transaction(stores, mode)
+        transaction.oncomplete = () => resolve()
+        transaction.onerror = () => reject(transaction.error)
+        transaction.onabort = () => reject(transaction.error || new Error('transaction-aborted'))
+        const objects = Object.fromEntries(stores.map(store => [store, transaction.objectStore(store)]))
+        fn(objects)
+      } catch (error) {
+        reject(error)
+        return
+      }
+    })
+  }
+
 
   return {
     async init() { db = await open() },
@@ -59,6 +84,39 @@ export function createStorage() {
     async loadReaderTrials() { return tx('readerTrials', 'readonly', s => s.getAll()) },
     async saveExperimentUpload(upload) { return tx('experimentUploads', 'readwrite', s => s.put(upload)) },
     async loadExperimentUploads() { return tx('experimentUploads', 'readonly', s => s.getAll()) },
+    async markExperimentUpload({ batchId, sessionIds = [], trialEventIds = [], readerTrialEventIds = [], ok = false, error = null, updatedAt = new Date().toISOString() }) {
+      const status = ok ? 'uploaded' : 'pending'
+      await multiTx(['experimentSessions', 'experimentTrials', 'readerTrials', 'experimentUploads'], 'readwrite', stores => {
+        const update = (store, key, fields) => {
+          const request = stores[store].get(key)
+          request.onsuccess = () => {
+            if (request.result) stores[store].put({ ...request.result, ...fields })
+          }
+        }
+        sessionIds.forEach(id => update('experimentSessions', id, {
+          uploadStatus: status,
+          uploadedAt: ok ? updatedAt : undefined,
+          lastUploadError: ok ? null : (error || 'upload-failed')
+        }))
+        trialEventIds.forEach(id => update('experimentTrials', id, {
+          uploadStatus: status,
+          uploadedAt: ok ? updatedAt : undefined
+        }))
+        readerTrialEventIds.forEach(id => update('readerTrials', id, {
+          uploadStatus: status,
+          uploadedAt: ok ? updatedAt : undefined
+        }))
+        stores.experimentUploads.put({
+          batchId,
+          sessionIds: [...sessionIds],
+          trialEventIds: [...trialEventIds],
+          readerTrialEventIds: [...readerTrialEventIds],
+          status,
+          updatedAt,
+          error: ok ? null : (error || 'upload-failed')
+        })
+      })
+    },
 
     // 导出：JSON（含元数据与版本号）；.brf 为盲文 ASCII 文本（点位用数字串，空格=空方）
     async exportNotes(format = 'json') {

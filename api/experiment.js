@@ -31,25 +31,56 @@ function arrayWithin(value, max = DATA_LIMIT) {
   return Array.isArray(value) && value.length <= max
 }
 
+function validateProfile(profile) {
+  if (!profile || typeof profile !== 'object' || Array.isArray(profile)) return false
+  const allowed = ['visionStatus', 'brailleExperience', 'audioEncodingExperience']
+  if (Object.keys(profile).some(key => !allowed.includes(key))) return false
+  const enums = {
+    visionStatus: ['sighted', 'low-vision', 'blind', 'undisclosed'],
+    brailleExperience: ['none', 'beginner', 'experienced', 'undisclosed'],
+    audioEncodingExperience: ['none', 'some', 'audiobraille-trained', 'undisclosed']
+  }
+  return allowed.every(key => enums[key].includes(profile[key]))
+}
+
+function mapProfile(profile = {}) {
+  return {
+    visionStatus: profile.visionStatus,
+    brailleExperience: profile.brailleExperience,
+    audioEncodingExperience: profile.audioEncodingExperience
+  }
+}
+
+function uniqueIds(items, field) {
+  const ids = items.map(item => item?.[field])
+  return ids.every(id => validId(id)) && new Set(ids).size === ids.length
+}
+
 function validatePayload(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return 'payload'
   if (!validId(payload.batchId) || !nonEmpty(payload.studyVersion)) return 'batch'
+  if (!Array.isArray(payload.sessions) || !Array.isArray(payload.trials) || !Array.isArray(payload.readerTrials)) return 'arrays'
   if (!arrayWithin(payload.sessions) || !arrayWithin(payload.trials) || !arrayWithin(payload.readerTrials)) return 'arrays'
+  if (payload.sessions.length === 0) return 'sessions'
+  if (!uniqueIds(payload.sessions, 'sessionId') || !uniqueIds(payload.trials, 'eventId') || !uniqueIds(payload.readerTrials, 'eventId')) return 'duplicate-id'
+  const versions = new Set(payload.sessions.map(session => session.studyVersion))
+  if (versions.size !== 1 || [...versions][0] !== payload.studyVersion) return 'version'
   const sessions = payload.sessions
   const sessionIds = new Set()
   for (const session of sessions) {
     if (!session || !validId(session.sessionId) || !validId(session.participantId)) return 'session-id'
-    if (!nonEmpty(session.studyVersion) || !nonEmpty(session.clientVersion) || !nonEmpty(session.randomSeed)) return 'session-version'
+    if (!nonEmpty(session.studyVersion) || !nonEmpty(session.clientVersion) || !nonEmpty(session.randomSeed) || !nonEmpty(session.protocolVersion) || !nonEmpty(session.recognitionBankVersion) || !nonEmpty(session.readerBankVersion)) return 'session-version'
     if (session.dataClass !== 'formal' || session.consentAccepted !== true) return 'consent'
-    if (!session.profile || typeof session.profile !== 'object' || Array.isArray(session.profile)) return 'profile'
+    if (!validateProfile(session.profile)) return 'profile'
     if (!nonEmpty(session.startedAt)) return 'startedAt'
     if (!Array.isArray(session.qualityFlags)) return 'qualityFlags'
+    if (!['eligible', 'incomplete', 'calibration-failed', 'invalid'].includes(session.analysisEligibility)) return 'analysis-eligibility'
     if (session.sessionId && sessionIds.has(session.sessionId)) return 'duplicate-session'
     sessionIds.add(session.sessionId)
   }
   for (const trial of payload.trials) {
     if (!trial || !validId(trial.eventId) || !sessionIds.has(trial.sessionId) || !validId(trial.stimulusId)) return 'trial-id'
-    if (!nonEmpty(trial.mode) || !['training', 'formal'].includes(trial.phase)) return 'trial-phase'
+    if (!nonEmpty(trial.bankVersion) || !nonEmpty(trial.mode) || trial.phase !== 'formal') return 'trial-phase'
     if (!integerInRange(trial.trialIndex, 0, DATA_LIMIT)) return 'trial-index'
     if (trial.reactionTimeMs != null && !integerInRange(trial.reactionTimeMs, 0, 86400000)) return 'reaction-time'
     if (!integerInRange(trial.replayCount, 0, 1000)) return 'replay-count'
@@ -64,7 +95,7 @@ function validatePayload(payload) {
     if (!integerInRange(trial.pauseCount, 0, 1000) || !integerInRange(trial.replayCount, 0, 1000)) return 'reader-count'
     if (trial.playbackSpeed != null && (typeof trial.playbackSpeed !== 'number' || trial.playbackSpeed < 0.5 || trial.playbackSpeed > 5)) return 'reader-speed'
     if (trial.selfReportedUnderstood != null && typeof trial.selfReportedUnderstood !== 'boolean') return 'reader-understood'
-    if (trial.summaryText != null && typeof trial.summaryText !== 'string') return 'reader-summary'
+    if (trial.summaryText != null && (typeof trial.summaryText !== 'string' || trial.summaryText.length > 5000)) return 'reader-summary'
   }
   return null
 }
@@ -78,7 +109,11 @@ function mapSession(session) {
     data_class: session.dataClass,
     consent_accepted: session.consentAccepted,
     cohort: session.cohort || null,
-    profile: session.profile,
+    profile: mapProfile(session.profile),
+    protocol_version: session.protocolVersion,
+    recognition_bank_version: session.recognitionBankVersion,
+    reader_bank_version: session.readerBankVersion,
+    analysis_eligibility: session.analysisEligibility,
     random_seed: session.randomSeed,
     started_at: session.startedAt,
     completed_at: session.completedAt || null,
@@ -92,6 +127,7 @@ function mapTrial(trial) {
     session_id: trial.sessionId,
     stimulus_id: trial.stimulusId,
     mode: trial.mode,
+    bank_version: trial.bankVersion,
     phase: trial.phase,
     trial_index: trial.trialIndex,
     reaction_time_ms: trial.reactionTimeMs ?? null,

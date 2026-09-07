@@ -11,6 +11,10 @@ create table if not exists experiment_sessions (
   started_at timestamptz not null,
   completed_at timestamptz,
   quality_flags jsonb not null default '[]'::jsonb,
+  protocol_version text not null,
+  recognition_bank_version text not null,
+  reader_bank_version text not null,
+  analysis_eligibility text not null check (analysis_eligibility in ('eligible', 'incomplete', 'calibration-failed', 'invalid')),
   created_at timestamptz not null default now()
 );
 
@@ -19,6 +23,7 @@ create table if not exists experiment_trials (
   session_id text not null references experiment_sessions(session_id),
   stimulus_id text not null,
   mode text not null,
+  bank_version text not null,
   phase text not null check (phase in ('training', 'formal')),
   trial_index integer not null check (trial_index >= 0),
   reaction_time_ms integer check (reaction_time_ms is null or reaction_time_ms >= 0),
@@ -54,6 +59,7 @@ create table if not exists upload_receipts (
 
 create index if not exists experiment_sessions_study_version_idx on experiment_sessions(study_version);
 create index if not exists experiment_sessions_data_class_idx on experiment_sessions(data_class);
+create index if not exists experiment_sessions_protocol_version_idx on experiment_sessions(protocol_version);
 create index if not exists experiment_trials_session_id_idx on experiment_trials(session_id);
 create index if not exists experiment_trials_stimulus_id_idx on experiment_trials(stimulus_id);
 create index if not exists reader_trials_session_id_idx on reader_trials(session_id);

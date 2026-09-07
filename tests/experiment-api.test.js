@@ -11,13 +11,14 @@ function validBatch(overrides = {}) {
     studyVersion: 'v13-1',
     sessions: [{
       sessionId: 'session-1', participantId: 'participant-1', studyVersion: 'v13-1', clientVersion: 'web-1',
-      dataClass: 'formal', consentAccepted: true, cohort: 'sighted-braille-naive', profile: {},
-      randomSeed: 'seed-1', startedAt: '2026-09-07T00:00:00.000Z', qualityFlags: []
+      dataClass: 'formal', consentAccepted: true, cohort: 'sighted-braille-naive',
+      profile: { visionStatus: 'sighted', brailleExperience: 'none', audioEncodingExperience: 'none' },
+      randomSeed: 'seed-1', protocolVersion: 'protocol-v13-1', recognitionBankVersion: 'recognition-v13-1', readerBankVersion: 'reader-v13-1', analysisEligibility: 'eligible',
+      startedAt: '2026-09-07T00:00:00.000Z', qualityFlags: []
     }],
     trials: [{
-      eventId: 'trial-1', sessionId: 'session-1', stimulusId: 'letters:a', mode: 'letters', phase: 'formal',
-      trialIndex: 0, reactionTimeMs: 1200, replayCount: 0, responseCells: [[1]],
-      expectedCellsHash: 'fnv1a-12345678', correct: true
+      eventId: 'trial-1', sessionId: 'session-1', stimulusId: 'letters:a', mode: 'letters', bankVersion: 'recognition-v13-1', phase: 'formal',
+      trialIndex: 0, reactionTimeMs: 1200, replayCount: 0, responseCells: [[1]], expectedCellsHash: 'fnv1a-12345678', correct: true
     }],
     readerTrials: [{
       eventId: 'reader-1', sessionId: 'session-1', passageId: 'reader-001', passageVersion: 'reader-v13-1',
@@ -45,11 +46,16 @@ function fakeDeps({ configured = true, fail = false } = {}) {
 
 describe('实验 Vercel 接口', () => {
   it('拒绝没有同意标记的 formal payload', async () => {
-    const response = await handleExperimentRequest(
-      requestOf(validBatch({ sessions: [{ ...validBatch().sessions[0], consentAccepted: false }] })),
-      fakeDeps()
-    )
+    const base = validBatch()
+    const response = await handleExperimentRequest(requestOf({ ...base, sessions: [{ ...base.sessions[0], consentAccepted: false }] }), fakeDeps())
     expect(response.status).toBe(400)
+  })
+
+  it('拒绝版本不一致、training formal 混入和 profile 未声明字段', async () => {
+    const base = validBatch()
+    expect((await handleExperimentRequest(requestOf({ ...base, studyVersion: 'v13-2' }), fakeDeps())).status).toBe(400)
+    expect((await handleExperimentRequest(requestOf({ ...base, trials: [{ ...base.trials[0], phase: 'training' }] }), fakeDeps())).status).toBe(400)
+    expect((await handleExperimentRequest(requestOf({ ...base, sessions: [{ ...base.sessions[0], profile: { ...base.sessions[0].profile, email: 'x@example.com' } }] }), fakeDeps())).status).toBe(400)
   })
 
   it('只向 Supabase 发送白名单字段并支持重复 eventId', async () => {
