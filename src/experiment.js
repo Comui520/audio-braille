@@ -63,9 +63,9 @@ function digitDots(d) { return [[3, 4, 5, 6], latinToDots(DIGIT_LETTER[d])] }
 
 export function buildTrials(mode, n = 10, lang = 'zh', options = {}) {
   const bank = buildRecognitionBank(lang)[mode] || []
-  const sourceBank = mode === 'syllables'
-    ? bank.filter(item => item.cellCount >= 2)
-    : bank
+  const sourceBank = options.phase === 'formal' || mode !== 'syllables'
+    ? bank
+    : bank.filter(item => item.cellCount >= 2)
   const seed = options.seed || `${mode}-${Math.random()}`
   return sampleRecognitionTrials(sourceBank, n, seed).map(item => ({
     ...item,
@@ -157,6 +157,8 @@ export function createExperimentModel({
   let calibrationPassed = null
   let calibrationAttempts = 0
   let qualityFlags = []
+  let roundNumber = 0
+  let replayCount = 0
 
   function copyTrial(trial) {
     return { ...trial, cells: trial.cells.map(cell => [...cell]) }
@@ -200,7 +202,6 @@ export function createExperimentModel({
     results = []
     listenedAtMs = null
   }
-
   function selectMode(nextMode) {
     if (!modes.includes(nextMode)) return snapshot()
     mode = nextMode
@@ -222,31 +223,49 @@ export function createExperimentModel({
     blocked = null
     if (modes.includes(nextMode)) mode = nextMode
     currentPhase = options.phase || (dataClass === 'formal' ? 'formal' : dataClass)
+    if (!['casual', 'training', 'formal'].includes(currentPhase)) currentPhase = dataClass
     currentSeed = options.seed || `${currentPhase}:${mode}:${Date.now()}`
+    roundNumber += 1
     trials = buildTrials(mode, trialCount, lang, { ...options, seed: currentSeed })
     index = 0
     results = []
     listenedAtMs = null
+    replayCount = 0
     stage = 'showcase'
     return snapshot()
   }
 
   function startTraining() {
+    if (stage === 'training') return snapshot()
+    const wasStarted = trainingStarted
     trainingStarted = true
     trainingCompleted = false
     calibrationPassed = null
-    calibrationAttempts = 0
-    qualityFlags = []
+    currentPhase = 'training'
+    if (!wasStarted) {
+      calibrationAttempts = 0
+      qualityFlags = []
+    }
     stage = 'training'
     return snapshot()
   }
 
   function completeCalibration(passed = false) {
+    if (stage !== 'training') {
+      if (!qualityFlags.includes('calibration-out-of-sequence')) qualityFlags.push('calibration-out-of-sequence')
+      return snapshot()
+    }
     calibrationAttempts += 1
     calibrationPassed = Boolean(passed)
     trainingCompleted = true
     if (!passed && !qualityFlags.includes('calibration-failed')) qualityFlags.push('calibration-failed')
     stage = 'idle'
+    return snapshot()
+  }
+
+  function replay() {
+    if (stage !== 'answer') return snapshot()
+    replayCount += 1
     return snapshot()
   }
 
@@ -259,6 +278,7 @@ export function createExperimentModel({
   function listen(now = null) {
     if (stage !== 'listen') return snapshot()
     listenedAtMs = typeof now === 'number' ? now : Date.now()
+    replayCount = 0
     stage = 'answer'
     return snapshot()
   }
@@ -273,20 +293,22 @@ export function createExperimentModel({
     const responseCells = Array.isArray(given) ? given.map(cell => [...cell]) : []
     const correct = gradeCells(trial.cells, responseCells)
     const submittedAt = typeof options.submittedAt === 'number' ? options.submittedAt : Date.now()
-    const replayCount = Number.isInteger(options.replayCount) && options.replayCount >= 0 ? options.replayCount : 0
+    const replayCountForRecord = Number.isInteger(options.replayCount) && options.replayCount >= 0
+      ? options.replayCount
+      : replayCount
     const record = {
-      trialId: `${sessionId || 'session'}:${currentPhase}:${index}`,
+      trialId: `${sessionId || 'session'}:${currentPhase}:${mode}:${roundNumber}:${index}`,
       stimulusId: trial.stimulusId,
       bankVersion: trial.bankVersion,
       trialIndex: index,
       mode,
       phase: currentPhase,
       studyVersion,
-      dataClass,
+      dataClass: currentPhase === 'training' ? 'training' : dataClass,
       listenStartedAt: listenedAtMs,
       submittedAt,
       reactionTimeMs: typeof listenedAtMs === 'number' ? Math.max(0, submittedAt - listenedAtMs) : null,
-      replayCount,
+      replayCount: replayCountForRecord,
       responseCells,
       expectedCellsHash: hashCells(trial.cells),
       correct
@@ -306,7 +328,7 @@ export function createExperimentModel({
   }
 
   return {
-    snapshot, selectMode, start, startTraining, completeCalibration,
+    snapshot, selectMode, start, startTraining, completeCalibration, replay,
     confirmShowcase, listen, submit, restart
   }
 }

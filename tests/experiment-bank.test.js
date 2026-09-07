@@ -13,6 +13,10 @@ describe('辨识刺激库', () => {
     }
   })
 
+  it('正式拼音题库保留有效的单方零声母音节', () => {
+    expect(buildRecognitionBank().syllables.some(item => item.syllable === 'yi' && item.cellCount === 1)).toBe(true)
+  })
+
   it('相同种子得到相同顺序，不同种子可以得到不同顺序', () => {
     const bank = buildRecognitionBank().syllables
     const a = sampleRecognitionTrials(bank, 24, 'seed-a')
