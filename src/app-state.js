@@ -14,7 +14,8 @@ export function createAppState() {
       mode: 'letters', stage: 'idle', trials: [], index: 0, results: [],
       researchMode: 'casual', formalPhase: null,
       participantId: null, sessionId: null, profile: null,
-      consentAccepted: false, trainingCompleted: false,
+      consentAccepted: false, trainingStarted: false, trainingCompleted: false,
+      calibrationPassed: null, calibrationAttempts: 0, qualityFlags: [],
       uploadStatus: 'idle'
     },
     audioUnlocked: false

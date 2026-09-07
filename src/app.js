@@ -39,6 +39,11 @@ export function appendSpace(existing = '') {
   return `${existing} `
 }
 
+export function buildResearchEntryHtml() {
+  return `<section class="research-entry"><h2>正式实验</h2><p>本实验收集匿名的听觉辨识和听书体验数据，用于研究 AudioBraille 的可用性。你可以随时停止。</p><label><input type="checkbox" data-field="consent"> 我同意匿名实验数据用于研究</label><label>视力状态<select data-field="visionStatus"><option value="sighted">明眼</option><option value="low-vision">低视力</option><option value="blind">盲人</option><option value="undisclosed">不愿回答</option></select></label><label>盲文经验<select data-field="brailleExperience"><option value="none">没有盲文经验</option><option value="beginner">初学盲文</option><option value="experienced">熟悉盲文</option><option value="undisclosed">不愿回答</option></select></label><label>AudioBraille 经验<select data-field="audioEncodingExperience"><option value="none">没有 AudioBraille 经验</option><option value="some">接触过类似听觉编码</option><option value="audiobraille-trained">完成过 AudioBraille 训练</option><option value="undisclosed">不愿回答</option></select></label></section>`
+}
+
+
 export function editorTextToAtoms(text = '') {
   return [...String(text)].map(char => {
     const code = char.codePointAt(0)

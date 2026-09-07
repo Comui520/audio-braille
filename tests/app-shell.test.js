@@ -4,7 +4,8 @@ import {
   buildHomeActions,
   buildTextareaDocumentHtml,
   buildTonePickerHtml,
-  buildLearningPlayback
+  buildLearningPlayback,
+  buildResearchEntryHtml
 } from '../src/app.js'
 
 describe('v12 应用壳', () => {
@@ -21,6 +22,14 @@ describe('v12 应用壳', () => {
     expect(html).toContain('id="note-textarea"')
     expect(html).toContain('wrap="soft"')
     expect(html).not.toContain('document-display')
+  })
+
+  it('正式实验入口要求同意并收集最少背景字段', () => {
+    const html = buildResearchEntryHtml()
+    expect(html).toContain('正式实验')
+    expect(html).toContain('同意')
+    expect(html).toContain('盲文经验')
+    expect(html).toContain('AudioBraille 经验')
   })
 
   it('音节单项包含五种声调选择', () => {

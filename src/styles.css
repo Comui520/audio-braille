@@ -109,7 +109,11 @@ kbd { display: inline-block; min-width: 1.7em; padding: .12em .35em; border: 1px
 .tone-option:hover, .tone-option.is-active { border-color: var(--brand); background: #eef3ff; color: var(--brand); }
 .tone-status { margin: .5rem 0 0; color: var(--text-muted); font-size: .88rem; }
 
-.tool-layout { display: grid; grid-template-columns: .8fr 1.2fr; gap: 1.5rem; margin-top: 1.5rem; }
+.research-entry { padding: 1.25rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.research-entry label { display: block; margin-top: .9rem; }
+.research-entry select { display: block; width: min(100%, 28rem); margin-top: .3rem; padding: .55rem; }
+
+
 .tool-copy, .input-tool, .experiment-panel, .reader-panel, .note-reference { padding: 1.25rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .key-row { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
 .input-tool-current { min-height: 4rem; padding: 1rem; border: 1px solid var(--line); background: var(--surface-muted); font-size: 2rem; }

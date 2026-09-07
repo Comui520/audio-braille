@@ -12,6 +12,7 @@ import { INITIALS, FINALS, TONES, syllableToDots } from './braille-engine.js'
 import { SYMBOLS_CN, SYMBOLS_EN } from './data/symbols.js'
 import { toCells, gradeCells } from './cells.js'
 import { buildRecognitionBank, sampleRecognitionTrials } from './experiment-bank.js'
+import { validateFormalRecord } from './experiment-protocol.js'
 
 // ===== 展示环节（先听左右声道对应关系）=====
 export const SHOWCASE_DOTS = [[1], [2], [3], [4], [5], [6]]
@@ -62,8 +63,11 @@ function digitDots(d) { return [[3, 4, 5, 6], latinToDots(DIGIT_LETTER[d])] }
 
 export function buildTrials(mode, n = 10, lang = 'zh', options = {}) {
   const bank = buildRecognitionBank(lang)[mode] || []
+  const sourceBank = mode === 'syllables'
+    ? bank.filter(item => item.cellCount >= 2)
+    : bank
   const seed = options.seed || `${mode}-${Math.random()}`
-  return sampleRecognitionTrials(bank, n, seed).map(item => ({
+  return sampleRecognitionTrials(sourceBank, n, seed).map(item => ({
     ...item,
     kind: mode === 'syllables' ? 'syllable' : mode === 'letters' ? 'letter' : mode === 'symbols' ? 'symbol' : 'digit'
   }))
@@ -119,40 +123,130 @@ export function summarize(exp) { return exp.summarize() }
 export const EXPERIMENT_TABS = ['recognition', 'reader']
 export function getExperimentTabs() { return [...EXPERIMENT_TABS] }
 
-export function createExperimentModel({ trialCount = 10, lang = 'zh' } = {}) {
+function hashCells(cells = []) {
+  const text = cells.map(cell => cell.join(',')).join('|')
+  let hash = 2166136261
+  for (const char of text) {
+    hash ^= char.charCodeAt(0)
+    hash = Math.imul(hash, 16777619)
+  }
+  return `fnv1a-${(hash >>> 0).toString(16).padStart(8, '0')}`
+}
+
+export function createExperimentModel({
+  trialCount = 10,
+  lang = 'zh',
+  dataClass = 'casual',
+  studyVersion = null,
+  consentAccepted = false,
+  participantId = null,
+  sessionId = null
+} = {}) {
   const modes = ['letters', 'syllables', 'symbols', 'digits']
   let mode = 'letters'
   let stage = 'idle'
   let trials = []
   let index = 0
   let results = []
+  let currentPhase = dataClass === 'formal' ? 'formal' : 'casual'
+  let currentSeed = null
+  let listenedAtMs = null
+  let blocked = null
+  let trainingStarted = false
+  let trainingCompleted = false
+  let calibrationPassed = null
+  let calibrationAttempts = 0
+  let qualityFlags = []
+
+  function copyTrial(trial) {
+    return { ...trial, cells: trial.cells.map(cell => [...cell]) }
+  }
+
+  function copyResult(result) {
+    return {
+      ...result,
+      record: result.record ? {
+        ...result.record,
+        responseCells: result.record.responseCells.map(cell => [...cell])
+      } : undefined
+    }
+  }
 
   function snapshot() {
     return {
       mode,
       stage,
-      trials: trials.map(trial => ({ ...trial, cells: trial.cells.map(cell => [...cell]) })),
+      blocked,
+      dataClass,
+      studyVersion,
+      participantId,
+      sessionId,
+      phase: currentPhase,
+      randomSeed: currentSeed,
+      trainingStarted,
+      trainingCompleted,
+      calibrationPassed,
+      calibrationAttempts,
+      qualityFlags: [...qualityFlags],
+      trials: trials.map(copyTrial),
       index,
-      results: results.map(result => ({ ...result }))
+      results: results.map(copyResult)
     }
+  }
+
+  function resetRound() {
+    trials = []
+    index = 0
+    results = []
+    listenedAtMs = null
   }
 
   function selectMode(nextMode) {
     if (!modes.includes(nextMode)) return snapshot()
     mode = nextMode
     stage = 'idle'
-    trials = []
-    index = 0
-    results = []
+    blocked = null
+    resetRound()
     return snapshot()
   }
 
   function start(nextMode = mode, options = {}) {
+    if (dataClass === 'formal' && !validateFormalRecord({
+      dataClass, consentAccepted, studyVersion, participantId, sessionId
+    }).valid) {
+      stage = 'idle'
+      resetRound()
+      blocked = 'consent-required'
+      return snapshot()
+    }
+    blocked = null
     if (modes.includes(nextMode)) mode = nextMode
-    trials = buildTrials(mode, trialCount, lang, options)
+    currentPhase = options.phase || (dataClass === 'formal' ? 'formal' : dataClass)
+    currentSeed = options.seed || `${currentPhase}:${mode}:${Date.now()}`
+    trials = buildTrials(mode, trialCount, lang, { ...options, seed: currentSeed })
     index = 0
     results = []
+    listenedAtMs = null
     stage = 'showcase'
+    return snapshot()
+  }
+
+  function startTraining() {
+    trainingStarted = true
+    trainingCompleted = false
+    calibrationPassed = null
+    calibrationAttempts = 0
+    qualityFlags = []
+    stage = 'training'
+    return snapshot()
+  }
+
+  function completeCalibration(passed = false) {
+    calibrationAttempts += 1
+    calibrationPassed = Boolean(passed)
+    trainingCompleted = true
+    if (!passed && !qualityFlags.includes('calibration-failed')) qualityFlags.push('calibration-failed')
+    stage = 'idle'
     return snapshot()
   }
 
@@ -162,32 +256,59 @@ export function createExperimentModel({ trialCount = 10, lang = 'zh' } = {}) {
     return snapshot()
   }
 
-  function listen() {
+  function listen(now = null) {
     if (stage !== 'listen') return snapshot()
+    listenedAtMs = typeof now === 'number' ? now : Date.now()
     stage = 'answer'
     return snapshot()
   }
 
-  function submit(given) {
-    if (stage === 'listen') stage = 'answer'
+  function submit(given, options = {}) {
+    if (stage === 'listen') {
+      listenedAtMs = typeof options.listenStartedAt === 'number' ? options.listenStartedAt : listenedAtMs
+      stage = 'answer'
+    }
     if (stage !== 'answer' || !trials[index]) return { correct: false, state: snapshot() }
     const trial = trials[index]
-    const correct = gradeCells(trial.cells, given)
-    results.push({ index, label: trial.label, correct })
+    const responseCells = Array.isArray(given) ? given.map(cell => [...cell]) : []
+    const correct = gradeCells(trial.cells, responseCells)
+    const submittedAt = typeof options.submittedAt === 'number' ? options.submittedAt : Date.now()
+    const replayCount = Number.isInteger(options.replayCount) && options.replayCount >= 0 ? options.replayCount : 0
+    const record = {
+      trialId: `${sessionId || 'session'}:${currentPhase}:${index}`,
+      stimulusId: trial.stimulusId,
+      bankVersion: trial.bankVersion,
+      trialIndex: index,
+      mode,
+      phase: currentPhase,
+      studyVersion,
+      dataClass,
+      listenStartedAt: listenedAtMs,
+      submittedAt,
+      reactionTimeMs: typeof listenedAtMs === 'number' ? Math.max(0, submittedAt - listenedAtMs) : null,
+      replayCount,
+      responseCells,
+      expectedCellsHash: hashCells(trial.cells),
+      correct
+    }
+    results.push({ index, label: trial.label, correct, record })
     index += 1
+    listenedAtMs = null
     stage = index >= trials.length ? 'done' : 'listen'
-    return { correct, state: snapshot() }
+    return { correct, record, state: snapshot() }
   }
 
   function restart() {
     stage = 'idle'
-    trials = []
-    index = 0
-    results = []
+    blocked = null
+    resetRound()
     return snapshot()
   }
 
-  return { snapshot, selectMode, start, confirmShowcase, listen, submit, restart }
+  return {
+    snapshot, selectMode, start, startTraining, completeCalibration,
+    confirmShowcase, listen, submit, restart
+  }
 }
 // ===== 旧 UI 适配层（任务 7 会移除页面接线）=====
 export function initExperiment({ state, render }) {
