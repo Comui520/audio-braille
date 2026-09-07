@@ -6,11 +6,13 @@ import { createInputController, keyToPoint } from './input.js'
 import { createProgressStore } from './curriculum.js'
 import { getTeachingCategories, getTeachingSections, getTeachingItems, getTeachingItem, markTeachingLearned, buildItemSpeech } from './teaching.js'
 import { createExperimentModel, buildShowcase, buildShowcaseInstruction } from './experiment.js'
-import { createReader, SAMPLE_BRAILLE } from './reader.js'
+import { createReader, SAMPLE_BRAILLE, buildReaderComprehensionHtml, createReaderTrialRecord } from './reader.js'
+import { READER_PASSAGES, sampleReaderPassages } from './data/reader-passages.js'
 import { initNotes } from './notes.js'
 import { playAudioBraille, buildCellSequence, unlockAudio } from './audio-braille.js'
 import { speak, speakAndWait, cancelSpeech } from './speech.js'
 import { getLang, setLang, t } from './i18n.js'
+import { validateParticipantProfile, deriveCohort, STUDY_VERSION } from './experiment-protocol.js'
 import { toCells, cellsToUnicode, cellsToDiagram, keyHintForCells } from './cells.js'
 import { dotsToUnicode, unicodeToDots } from './braille-engine.js'
 import { buildInputDisplayModel } from './input-display.js'
@@ -40,7 +42,7 @@ export function appendSpace(existing = '') {
 }
 
 export function buildResearchEntryHtml() {
-  return `<section class="research-entry"><h2>正式实验</h2><p>本实验收集匿名的听觉辨识和听书体验数据，用于研究 AudioBraille 的可用性。你可以随时停止。</p><label><input type="checkbox" data-field="consent"> 我同意匿名实验数据用于研究</label><label>视力状态<select data-field="visionStatus"><option value="sighted">明眼</option><option value="low-vision">低视力</option><option value="blind">盲人</option><option value="undisclosed">不愿回答</option></select></label><label>盲文经验<select data-field="brailleExperience"><option value="none">没有盲文经验</option><option value="beginner">初学盲文</option><option value="experienced">熟悉盲文</option><option value="undisclosed">不愿回答</option></select></label><label>AudioBraille 经验<select data-field="audioEncodingExperience"><option value="none">没有 AudioBraille 经验</option><option value="some">接触过类似听觉编码</option><option value="audiobraille-trained">完成过 AudioBraille 训练</option><option value="undisclosed">不愿回答</option></select></label></section>`
+  return `<section class="research-entry"><h2>正式实验</h2><p>本实验收集匿名的听觉辨识和听书体验数据，用于研究 AudioBraille 的可用性。你可以随时停止。</p><label><input type="checkbox" data-field="consent"> 我同意匿名实验数据用于研究</label><label>视力状态<select data-field="visionStatus"><option value="sighted">明眼</option><option value="low-vision">低视力</option><option value="blind">盲人</option><option value="undisclosed">不愿回答</option></select></label><label>盲文经验<select data-field="brailleExperience"><option value="none">没有盲文经验</option><option value="beginner">初学盲文</option><option value="experienced">熟悉盲文</option><option value="undisclosed">不愿回答</option></select></label><label>AudioBraille 经验<select data-field="audioEncodingExperience"><option value="none">没有 AudioBraille 经验</option><option value="some">接触过类似听觉编码</option><option value="audiobraille-trained">完成过 AudioBraille 训练</option><option value="undisclosed">不愿回答</option></select></label><button class="button button-primary" data-action="research-submit">进入训练和校准</button></section>`
 }
 
 
@@ -158,11 +160,33 @@ export function initApp() {
       else loadEditorText('notes', fallbackText)
     }
   })
+  let selectedReaderPassage = READER_PASSAGES[0]
+  let readerPassages = READER_PASSAGES
+  let readerCompleted = false
+  let readerUnderstood = null
+  let readerSummary = ''
+  let readerTrialRecord = null
+  let readerPlayStartedAt = null
+  let readerReplayCount = 0
   const reader = createReader({ onTick: (position, total) => {
     const el = document.querySelector('#reader-progress')
     if (el) el.textContent = `${position} / ${total}`
+  }, onComplete: () => {
+    readerCompleted = true
+    readerTrialRecord = createReaderTrialRecord({
+      passageId: selectedReaderPassage.passageId,
+      passageVersion: selectedReaderPassage.passageVersion,
+      passageIndex: readerPassages.findIndex(passage => passage.passageId === selectedReaderPassage.passageId),
+      playStartedAt: readerPlayStartedAt,
+      playCompletedAt: Date.now(),
+      playedDurationMs: readerPlayStartedAt ? Date.now() - readerPlayStartedAt : null,
+      completed: true,
+      replayCount: readerReplayCount,
+      playbackSpeed: reader.getSpeed()
+    })
+    render()
   } })
-  const experiment = createExperimentModel({ trialCount: 10 })
+  let experiment = createExperimentModel({ trialCount: 10 })
   let noteText = ''
   let inputOutput = ''
   let progressCache = {}
@@ -175,6 +199,45 @@ export function initApp() {
   }
   let experimentToken = 0
   let gateOpen = false
+  let experimentEntryError = ''
+
+  function createSessionId(prefix) {
+    if (globalThis.crypto?.randomUUID) return `${prefix}-${globalThis.crypto.randomUUID()}`
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  }
+
+  function beginFormalExperiment() {
+    const consent = document.querySelector('[data-field="consent"]')?.checked === true
+    const profile = {
+      visionStatus: document.querySelector('[data-field="visionStatus"]')?.value,
+      brailleExperience: document.querySelector('[data-field="brailleExperience"]')?.value,
+      audioEncodingExperience: document.querySelector('[data-field="audioEncodingExperience"]')?.value
+    }
+    if (!consent) {
+      experimentEntryError = '开始正式实验前，请先同意匿名数据用于研究。'
+      return false
+    }
+    if (!validateParticipantProfile(profile).valid) {
+      experimentEntryError = '请完成参与者背景字段。'
+      return false
+    }
+    const participantId = createSessionId('participant')
+    const sessionId = createSessionId('session')
+    experiment = createExperimentModel({
+      trialCount: 10,
+      dataClass: 'formal',
+      studyVersion: STUDY_VERSION,
+      consentAccepted: true,
+      participantId,
+      sessionId
+    })
+    experimentEntryError = ''
+    readerPassages = sampleReaderPassages(READER_PASSAGES, 3, sessionId)
+    selectedReaderPassage = readerPassages[0]
+    state = { ...state, experiment: { ...state.experiment, researchMode: 'formal', formalPhase: 'training', participantId, sessionId, profile: { ...profile, cohort: deriveCohort(profile) }, consentAccepted: true } }
+    experiment.startTraining()
+    return true
+  }
 
   const main = document.querySelector('#main-content')
   if (!main) return
@@ -274,13 +337,20 @@ export function initApp() {
 
   function renderExperiment() {
     const model = experiment.snapshot()
+    if (state.experiment.researchMode === 'entry') {
+      return `<section class="page page-experiment"><div class="page-heading"><div><p class="eyebrow">AUDIOBRAILLE LAB</p><h1>AudioBraille 实验</h1></div></div><button class="button button-quiet" data-action="research-cancel">返回试玩实验</button>${buildResearchEntryHtml()}${experimentEntryError ? `<p class="form-error" role="alert">${esc(experimentEntryError)}</p>` : ''}</section>`
+    }
     return `<section class="page page-experiment"><div class="page-heading"><div><p class="eyebrow">AUDIOBRAILLE LAB</p><h1>AudioBraille 实验</h1><p class="lead">测试一种通过空间音频聆听盲文的新途径。</p></div></div><div class="tabs"><button class="tab${state.experimentTab === 'recognition' ? ' is-active' : ''}" data-action="experiment-tab" data-tab="recognition">听觉辨识</button><button class="tab${state.experimentTab === 'reader' ? ' is-active' : ''}" data-action="experiment-tab" data-tab="reader">听书场景</button></div>${state.experimentTab === 'recognition' ? renderRecognition(model) : renderReader()}</section>`
   }
 
   function renderRecognition(model) {
     const modes = [['letters', '字母'], ['syllables', '拼音音节'], ['symbols', '符号'], ['digits', '数字']]
-    let body = `<p>先选择一类，开始后会先展示左右耳和音高的对应关系。</p><div class="mode-picker">${modes.map(([id, label]) => `<button class="mode-chip${model.mode === id ? ' is-active' : ''}" data-action="experiment-mode" data-mode="${id}">${label}</button>`).join('')}</div>`
-    if (model.stage === 'idle') body += `<button class="button button-primary" data-action="experiment-start">开始一轮实验</button>`
+    let body = `<p>选择试玩或进入正式实验。正式实验会先完成统一训练和校准。</p><div class="mode-picker">${modes.map(([id, label]) => `<button class="mode-chip${model.mode === id ? ' is-active' : ''}" data-action="experiment-mode" data-mode="${id}">${label}</button>`).join('')}</div>`
+    if (model.stage === 'idle') {
+      if (state.experiment.researchMode === 'formal' && state.experiment.formalPhase === 'recognition') body += `<button class="button button-primary" data-action="experiment-start">开始正式辨识</button>`
+      else body += `<button class="button button-primary" data-action="experiment-start">开始试玩一轮</button><button class="button button-secondary" data-action="research-entry">进入正式实验</button>`
+    }
+    if (model.stage === 'training') body += `<div class="experiment-status"><strong>统一训练和校准</strong><p>请先听完整规则、六个单点和多点示例，再完成固定校准题。训练数据不会计入正式结果。</p><button class="button button-success" data-action="research-calibration-pass">校准通过</button><button class="button button-quiet" data-action="research-calibration-fail">需要重试</button></div>`
     if (model.stage === 'showcase') body += `<div class="experiment-status"><strong>展示阶段</strong><p>先听一次完整说明，随后依次播放六个声音。当前：<span id="showcase-current">准备开始</span></p><button class="button button-primary" data-action="experiment-confirm">我已听完展示，进入测试</button></div>`
     if (model.stage === 'listen' || model.stage === 'answer') {
       const trial = model.trials[model.index]
@@ -288,6 +358,7 @@ export function initApp() {
       if (trial) body += `<p class="sr-only">本题需要 ${trial.cells.length} 方</p>`
     }
     if (model.stage === 'done') body += `<div class="experiment-status"><h2>本轮完成</h2><p>正确 ${model.results.filter(result => result.correct).length} / ${model.results.length}</p><button class="button button-primary" data-action="experiment-restart">再来一轮</button></div>`
+    if (model.blocked) body += `<p class="form-error" role="alert">正式实验需要先完成同意和身份字段。</p>`
     return `<div class="experiment-panel">${body}</div>`
   }
 
@@ -295,7 +366,8 @@ export function initApp() {
     const input = state.input
     const composition = input.compositionCells || input.confirmedCells
     const compositionCursor = input.compositionCursor ?? input.cursorIndex
-    return `<div class="reader-panel"><h2>听书场景</h2><p>这里输入的是盲文。上方只显示当前多方；按 0 确认后，内容进入下方盲文文档。</p>${inputDisplayHtml(composition, input.currentDots, compositionCursor, '当前多方输入')}${buildTextareaDocumentHtml(currentReaderText, { id: 'reader-text', rows: 4, label: '盲文内容' })}<label class="range-label">速度 <input id="reader-speed" type="range" min="0.5" max="5" step="0.5" value="${reader.getSpeed()}"><output>${reader.getSpeed()}x</output></label><div class="button-row"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-stop">停止</button></div><div id="reader-progress" aria-live="polite"></div></div>`
+    const passageOptions = readerPassages.map(passage => `<option value="${passage.passageId}"${passage.passageId === selectedReaderPassage.passageId ? ' selected' : ''}>${esc(passage.title)} · ${passage.lengthStratum}</option>`).join('')
+    return `<div class="reader-panel"><h2>听书场景</h2><p>选择一段材料，播放完成后再填写理解反馈。</p><label>材料<select id="reader-passage" data-action="reader-passage">${passageOptions}</select></label><p class="reader-passage-meta">${esc(selectedReaderPassage.topicStratum)} · ${esc(selectedReaderPassage.difficultyStratum)}</p><p>${esc(selectedReaderPassage.text)}</p><div class="reader-input-preview">${inputDisplayHtml(composition, input.currentDots, compositionCursor, '当前多方输入')}</div>${buildTextareaDocumentHtml(currentReaderText, { id: 'reader-text', rows: 4, label: '盲文内容' })}<label class="range-label">速度 <input id="reader-speed" type="range" min="0.5" max="5" step="0.5" value="${reader.getSpeed()}"><output>${reader.getSpeed()}x</output></label><div class="button-row"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-stop">停止</button></div><div id="reader-progress" aria-live="polite"></div>${buildReaderComprehensionHtml({ completed: readerCompleted, understood: readerUnderstood, summaryText: readerSummary })}</div>`
   }
 
   function renderNotes() {
@@ -363,6 +435,14 @@ export function initApp() {
     readerText?.addEventListener('input', () => {
       currentReaderText = readerText.value
       loadEditorText('reader', currentReaderText, readerText.selectionStart)
+    })
+    const readerPassage = document.querySelector('#reader-passage')
+    readerPassage?.addEventListener('change', () => {
+      selectedReaderPassage = readerPassages.find(passage => passage.passageId === readerPassage.value) || readerPassages[0]
+      readerCompleted = false
+      readerUnderstood = null
+      readerSummary = ''
+      render()
     })
     const importFile = document.querySelector('#note-import-file')
     importFile?.addEventListener('change', () => {
@@ -513,7 +593,10 @@ export function initApp() {
     if (TOP_LEVEL_PAGES.includes(action) || action === 'learning' || action === 'experiment' || action === 'notes' || action.startsWith('teaching-') || action === 'experiment-mode' || action === 'experiment-restart') resetInput()
     if (action === 'home') state = { ...state, page: 'home' }
     else if (action === 'learning') state = { ...state, page: 'learning', learningTab: 'teaching' }
-    else if (action === 'experiment') state = { ...state, page: 'experiment' }
+    else if (action === 'experiment') state = { ...state, page: 'experiment', experiment: { ...state.experiment, researchMode: state.experiment.researchMode === 'formal' ? 'formal' : 'casual' } }
+    else if (action === 'research-entry') { experimentEntryError = ''; state = { ...state, page: 'experiment', experiment: { ...state.experiment, researchMode: 'entry' } } }
+    else if (action === 'research-cancel') { experimentEntryError = ''; state = { ...state, experiment: { ...state.experiment, researchMode: 'casual', formalPhase: null } } }
+    else if (action === 'research-submit') { beginFormalExperiment() }
     else if (action === 'notes') state = { ...state, page: 'notes' }
     else if (action === 'guide') document.querySelector('.guide-fold')?.setAttribute('open', '')
     else if (action === 'toggle-language') {
@@ -550,17 +633,33 @@ export function initApp() {
       void progress.markLearned(state.teaching.category, state.teaching.section, state.teaching.item)
       state = { ...state, teaching: { ...state.teaching, item: next.current || state.teaching.item } }
     } else if (action === 'experiment-mode') { experimentToken++; cancelSpeech(); experiment.selectMode(target.dataset.mode); state = { ...state, input: { confirmedCells: [], currentDots: [] } } }
-    else if (action === 'experiment-start') { experiment.start(); state = { ...state, input: { confirmedCells: [], currentDots: [] } }; void playShowcase() }
+    else if (action === 'experiment-start') {
+      const phase = state.experiment.researchMode === 'formal' ? 'formal' : 'casual'
+      experiment.start(undefined, { seed: createSessionId('seed'), phase })
+      state = { ...state, experiment: { ...state.experiment, formalPhase: phase === 'formal' ? 'recognition' : state.experiment.formalPhase }, input: { confirmedCells: [], currentDots: [] } }
+      void playShowcase()
+    }
+    else if (action === 'research-calibration-pass' || action === 'research-calibration-fail') {
+      const passed = action === 'research-calibration-pass'
+      experiment.completeCalibration(passed)
+      if (!passed) experiment.startTraining()
+      state = { ...state, experiment: { ...state.experiment, formalPhase: passed ? 'recognition' : 'training', trainingStarted: true, trainingCompleted: true, calibrationPassed: passed } }
+    }
     else if (action === 'experiment-confirm') { experimentToken++; cancelSpeech(); experiment.confirmShowcase(); render() }
     else if (action === 'experiment-listen') {
-      const current = experiment.snapshot().trials[experiment.snapshot().index]
+      const currentState = experiment.snapshot()
+      const current = currentState.trials[currentState.index]
       if (current) void playCells(current.cells)
-      if (experiment.snapshot().stage === 'listen') experiment.listen()
+      if (currentState.stage === 'listen') experiment.listen()
+      else if (currentState.stage === 'answer') experiment.replay()
       render()
     }
     else if (action === 'experiment-restart') { experiment.restart(); state = { ...state, input: { confirmedCells: [], currentDots: [] } } }
-    else if (action === 'reader-play') { currentReaderText = document.querySelector('#reader-text')?.value || SAMPLE_BRAILLE; reader.stop(); void reader.play(currentReaderText) }
+    else if (action === 'reader-play') { readerCompleted = false; readerUnderstood = null; readerSummary = ''; readerTrialRecord = null; readerReplayCount = reader.snapshot().position > 0 ? readerReplayCount + 1 : 0; readerPlayStartedAt = Date.now(); reader.stop(); const playText = state.experiment.researchMode === 'formal' ? selectedReaderPassage.pinyin : (document.querySelector('#reader-text')?.value || SAMPLE_BRAILLE); currentReaderText = playText; void reader.play(playText) }
     else if (action === 'reader-stop') reader.stop()
+    else if (action === 'reader-understood') { readerUnderstood = true; if (readerTrialRecord) readerTrialRecord = { ...readerTrialRecord, selfReportedUnderstood: true }; render() }
+    else if (action === 'reader-not-understood') { readerUnderstood = false; if (readerTrialRecord) readerTrialRecord = { ...readerTrialRecord, selfReportedUnderstood: false }; render() }
+    else if (action === 'reader-summary-submit') { readerSummary = document.querySelector('#reader-summary')?.value || ''; if (readerTrialRecord) readerTrialRecord = { ...readerTrialRecord, summaryText: readerSummary, summarySubmitted: readerSummary.trim().length > 0 }; render() }
     else if (action === 'notes-save') void notes.save()
     else if (action === 'notes-play-text') { noteText = document.querySelector('#note-textarea')?.value || ''; void notes.readAloud('tts') }
     else if (action === 'notes-play-audio') { noteText = document.querySelector('#note-textarea')?.value || ''; void notes.readAloud('braille', Number(document.querySelector('#notes-speed')?.value || 1)) }

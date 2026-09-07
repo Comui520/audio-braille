@@ -5,6 +5,43 @@ import { INITIALS, FINALS, syllableToDots, dotsToUnicode, unicodeToDots } from '
 // 内置示例短文（拼音音节串，空格分隔；数字/声调用数字后缀）
 export const SAMPLE_TEXT = 'ma ma he wo yi qi xue xi mang wen dian nao shi jie'
 
+export function buildPassageSequence(passage = {}) {
+  return buildReadingDots(passage.pinyin || passage.text || '').map(dots => [...dots])
+}
+
+export function createReaderTrialRecord({
+  passageId = null,
+  passageVersion = null,
+  passageIndex = null,
+  playStartedAt = null,
+  playCompletedAt = null,
+  playedDurationMs = null,
+  completed = false,
+  pauseCount = 0,
+  replayCount = 0,
+  playbackSpeed = 1,
+  selfReportedUnderstood = null,
+  summaryText = ''
+} = {}) {
+  const safeSummary = typeof summaryText === 'string' ? summaryText : ''
+  return {
+    passageTrialId: `${passageId || 'passage'}:${passageIndex ?? 0}:${playStartedAt ?? 'pending'}`,
+    passageId,
+    passageVersion,
+    passageIndex,
+    playStartedAt,
+    playCompletedAt,
+    playedDurationMs,
+    completed: Boolean(completed),
+    pauseCount: Math.max(0, Number(pauseCount) || 0),
+    replayCount: Math.max(0, Number(replayCount) || 0),
+    playbackSpeed: clampSpeed(playbackSpeed),
+    selfReportedUnderstood,
+    summaryText: safeSummary,
+    summarySubmitted: safeSummary.trim().length > 0
+  }
+}
+
 // 拼音或 Unicode 盲文 → 单方播放序列
 const INITIAL_LIST = ['zh', 'ch', 'sh', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h', 'j', 'q', 'x', 'r', 'z', 'c', 's']
 
@@ -40,7 +77,17 @@ export function buildReadingDots(text) {
   return value.split(/\s+/).filter(Boolean).flatMap(w => syllableToDotsSeq(w))
 }
 
-export const SAMPLE_BRAILLE = buildReadingDots(SAMPLE_TEXT).map(dotsToUnicode).join('')
+export function buildReaderComprehensionHtml({ completed = false, understood = null, summaryText = '' } = {}) {
+  if (!completed) return '<p class="reader-comprehension-pending">播放完成后可填写理解反馈。</p>'
+  const choices = `<div class="button-row"><button class="button button-success" data-action="reader-understood">听懂了</button><button class="button button-quiet" data-action="reader-not-understood">没听懂</button></div>`
+  if (understood !== true) return `<section class="reader-comprehension"><h3>理解反馈</h3>${choices}</section>`
+  return `<section class="reader-comprehension"><h3>理解反馈</h3>${choices}<label>普通文字概括<textarea id="reader-summary" data-field="reader-summary" rows="4">${escReaderText(summaryText)}</textarea></label><button class="button button-primary" data-action="reader-summary-submit">提交概括</button></section>`
+}
+
+function escReaderText(value) {
+  return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+}
+
 
 // 速度限制（0.5x~5x）
 export function clampSpeed(x) {
@@ -50,7 +97,7 @@ export function clampSpeed(x) {
 }
 
 // 朗读控制器
-export function createReader({ onTick = null } = {}) {
+export function createReader({ onTick = null, onComplete = null } = {}) {
   let speed = 1
   let playing = false
   let stopFlag = false
@@ -76,6 +123,7 @@ export function createReader({ onTick = null } = {}) {
         await new Promise(r => setTimeout(r, 100 / speed))
       }
       playing = false
+      onComplete?.()
     },
     stop() { stopFlag = true; playing = false }
   }

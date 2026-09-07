@@ -30,6 +30,7 @@ describe('v12 应用壳', () => {
     expect(html).toContain('同意')
     expect(html).toContain('盲文经验')
     expect(html).toContain('AudioBraille 经验')
+    expect(html).toContain('data-action="research-submit"')
   })
 
   it('音节单项包含五种声调选择', () => {

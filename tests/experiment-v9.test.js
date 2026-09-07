@@ -67,6 +67,34 @@ describe('v9 AudioBraille 实验模型', () => {
     })
   })
 
+  it('重听计数由模型维护，且跨轮次 trialId 唯一', () => {
+    const model = createExperimentModel({ trialCount: 1, dataClass: 'formal', studyVersion: 'v13-1', consentAccepted: true, participantId: 'p1', sessionId: 's1' })
+    model.start('letters', { seed: 'one', phase: 'formal' })
+    model.confirmShowcase()
+    model.listen(100)
+    model.replay()
+    const first = model.submit(model.snapshot().trials[0].cells, { submittedAt: 200 }).record
+    model.restart()
+    model.start('letters', { seed: 'two', phase: 'formal' })
+    model.confirmShowcase()
+    model.listen(300)
+    const second = model.submit(model.snapshot().trials[0].cells, { submittedAt: 400 }).record
+    expect(first.replayCount).toBe(1)
+    expect(second.replayCount).toBe(0)
+    expect(second.trialId).not.toBe(first.trialId)
+  })
+
+  it('校准重试会累积尝试次数并保留失败标记', () => {
+    const model = createExperimentModel({ dataClass: 'formal', studyVersion: 'v13-1', consentAccepted: true, participantId: 'p1', sessionId: 's1' })
+    model.startTraining()
+    model.completeCalibration(false)
+    model.startTraining()
+    const state = model.completeCalibration(true)
+    expect(state.calibrationAttempts).toBe(2)
+    expect(state.calibrationPassed).toBe(true)
+    expect(state.qualityFlags).toContain('calibration-failed')
+  })
+
   it('模式切换会清理旧一轮状态', () => {
     const model = createExperimentModel({ trialCount: 3 })
     model.start('letters')
