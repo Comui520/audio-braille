@@ -9,7 +9,7 @@ import { createReader } from '../src/reader.js'
 describe('v9 reader lifecycle', () => {
   it('初始状态未播放', () => {
     const reader = createReader()
-    expect(reader.snapshot()).toMatchObject({ playing: false, speed: 1 })
+    expect(reader.snapshot()).toMatchObject({ playing: false, speed: 1, generation: expect.any(Number) })
   })
 
   it('速度被限制在 0.5 到 5', () => {
@@ -26,6 +26,13 @@ describe('v9 reader lifecycle', () => {
     expect(reader.snapshot().playing).toBe(false)
   })
 
+
+  it('完成回调携带本次播放 generation，便于忽略旧播放回调', async () => {
+    let completion = null
+    const reader = createReader({ onComplete: info => { completion = info } })
+    await reader.play([[1]])
+    expect(completion).toMatchObject({ generation: expect.any(Number) })
+  })
   it('停止播放不会触发完成回调，暂停会累计次数', async () => {
     let completed = 0
     const reader = createReader({ onComplete: () => { completed += 1 } })

@@ -1,6 +1,6 @@
 // tests/reader.test.js
 import { describe, it, expect } from 'vitest'
-import { buildReadingDots, clampSpeed, SAMPLE_TEXT, syllableToDotsSeq } from '../src/reader.js'
+import { buildReadingDots, buildReaderComprehensionHtml, clampSpeed, SAMPLE_TEXT, syllableToDotsSeq } from '../src/reader.js'
 
 describe('听书（v5）', () => {
   it('SAMPLE_TEXT 内置示例短文', () => {
@@ -23,6 +23,12 @@ describe('听书（v5）', () => {
   })
   it('syllableToDotsSeq：未知音节返回空数组', () => {
     expect(syllableToDotsSeq('zzz')).toEqual([])
+  })
+
+  it('听懂后允许跳过普通文字概括', () => {
+    const html = buildReaderComprehensionHtml({ completed: true, understood: true })
+    expect(html).toContain('data-action="reader-summary-submit"')
+    expect(html).toContain('data-action="reader-summary-skip"')
   })
   it('buildReadingDots：整句转成点位序列', () => {
     const seq = buildReadingDots(SAMPLE_TEXT)

@@ -1,7 +1,8 @@
-// src/app-state.js —— v9：单一应用状态与纯更新函数
+// src/app-state.js —— v13：单一应用状态与纯更新函数
 export const TOP_LEVEL_PAGES = ['home', 'learning', 'experiment', 'notes']
 export const LEARNING_TABS = ['teaching', 'input']
 export const EXPERIMENT_TABS = ['recognition', 'reader']
+export const FORMAL_RECOGNITION_MODES = ['letters', 'syllables', 'symbols', 'digits']
 
 export function createAppState() {
   return {
@@ -16,10 +17,92 @@ export function createAppState() {
       participantId: null, sessionId: null, profile: null,
       consentAccepted: false, trainingStarted: false, trainingCompleted: false,
       calibrationPassed: null, calibrationAttempts: 0, qualityFlags: [],
+      formalRecognitionModesCompleted: [], formalReaderCompleted: 0,
       uploadStatus: 'idle'
     },
     audioUnlocked: false
   }
+}
+
+export const FORMAL_PHASE_ORDER = ['consent', 'profile', 'training', 'recognition', 'reader', 'complete']
+
+export function beginFormalExperiment(state, { participantId = null, sessionId = null } = {}) {
+  return {
+    ...state,
+    experiment: {
+      ...state.experiment,
+      researchMode: 'formal',
+      formalPhase: 'consent',
+      participantId,
+      sessionId,
+      profile: null,
+      consentAccepted: false,
+      trainingStarted: false,
+      trainingCompleted: false,
+      calibrationPassed: null,
+      calibrationAttempts: 0,
+      qualityFlags: [],
+      formalRecognitionModesCompleted: [],
+      formalReaderCompleted: 0,
+      uploadStatus: 'idle'
+    }
+  }
+}
+
+export function acceptConsent(state) {
+  if (state.experiment.formalPhase !== 'consent') return state
+  return { ...state, experiment: { ...state.experiment, formalPhase: 'profile', consentAccepted: true } }
+}
+
+export function saveParticipantProfile(state, profile) {
+  if (state.experiment.formalPhase !== 'profile') return state
+  return { ...state, experiment: { ...state.experiment, formalPhase: 'training', profile, trainingStarted: true } }
+}
+
+export function completeTraining(state, { passed = false } = {}) {
+  if (state.experiment.formalPhase !== 'training') return state
+  const calibrationAttempts = (state.experiment.calibrationAttempts || 0) + 1
+  const qualityFlags = passed
+    ? state.experiment.qualityFlags
+    : [...new Set([...state.experiment.qualityFlags, 'calibration-failed'])]
+  return {
+    ...state,
+    experiment: {
+      ...state.experiment,
+      formalPhase: passed ? 'recognition' : 'training',
+      trainingCompleted: Boolean(passed),
+      calibrationPassed: Boolean(passed),
+      calibrationAttempts,
+      qualityFlags
+    }
+  }
+}
+
+export function completeRecognition(state, completedModes = FORMAL_RECOGNITION_MODES) {
+  if (state.experiment.formalPhase !== 'recognition') return state
+  const modes = Array.isArray(completedModes) ? [...completedModes] : [...FORMAL_RECOGNITION_MODES]
+  const validPrefix = modes.length <= FORMAL_RECOGNITION_MODES.length
+    && modes.every((mode, index) => mode === FORMAL_RECOGNITION_MODES[index])
+  if (!validPrefix) return state
+  const complete = modes.length === FORMAL_RECOGNITION_MODES.length
+  return {
+    ...state,
+    experiment: {
+      ...state.experiment,
+      formalPhase: complete ? 'reader' : 'recognition',
+      formalRecognitionModesCompleted: modes
+    }
+  }
+}
+
+export function completeReader(state, completedCount = 3) {
+  if (state.experiment.formalPhase !== 'reader' || completedCount !== 3) return state
+  return { ...state, experiment: { ...state.experiment, formalPhase: 'complete', formalReaderCompleted: completedCount } }
+}
+
+export function setExperimentUploadStatus(state, uploadStatus) {
+  if (!['idle', 'pending', 'success', 'error'].includes(uploadStatus)) return state
+  return { ...state, experiment: { ...state.experiment, uploadStatus } }
 }
 
 export function navigate(state, page) {

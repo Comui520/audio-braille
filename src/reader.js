@@ -83,7 +83,7 @@ export function buildReaderComprehensionHtml({ completed = false, understood = n
   if (!completed) return '<p class="reader-comprehension-pending">播放完成后可填写理解反馈。</p>'
   const choices = `<div class="button-row"><button class="button button-success" data-action="reader-understood">听懂了</button><button class="button button-quiet" data-action="reader-not-understood">没听懂</button></div>`
   if (understood !== true) return `<section class="reader-comprehension"><h3>理解反馈</h3>${choices}</section>`
-  return `<section class="reader-comprehension"><h3>理解反馈</h3>${choices}<label>普通文字概括<textarea id="reader-summary" data-field="reader-summary" rows="4">${escReaderText(summaryText)}</textarea></label><button class="button button-primary" data-action="reader-summary-submit">提交概括</button></section>`
+  return `<section class="reader-comprehension"><h3>理解反馈</h3>${choices}<label>普通文字概括<textarea id="reader-summary" data-field="reader-summary" rows="4">${escReaderText(summaryText)}</textarea></label><div class="button-row"><button class="button button-primary" data-action="reader-summary-submit">提交概括</button><button class="button button-quiet" data-action="reader-summary-skip">跳过概括</button></div></section>`
 }
 
 function escReaderText(value) {
@@ -117,7 +117,7 @@ export function createReader({ onTick = null, onComplete = null } = {}) {
   return {
     setSpeed(s) { speed = clampSpeed(s) },
     getSpeed() { return speed },
-    snapshot() { return { playing, paused, pauseCount, speed, position, total } },
+    snapshot() { return { playing, paused, pauseCount, speed, position, total, generation } },
     async play(text) {
       if (playing) return
       const token = ++generation
@@ -139,7 +139,7 @@ export function createReader({ onTick = null, onComplete = null } = {}) {
       }
       if (token !== generation) return
       playing = false
-      onComplete?.()
+      onComplete?.({ generation: token })
     },
     pause() {
       if (!playing || paused) return false

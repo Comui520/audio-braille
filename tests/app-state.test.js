@@ -5,7 +5,13 @@ import {
   navigate,
   selectLearningTab,
   selectExperimentTab,
-  setTeachingLocation
+  setTeachingLocation,
+  beginFormalExperiment,
+  acceptConsent,
+  saveParticipantProfile,
+  completeTraining,
+  completeRecognition,
+  completeReader
 } from '../src/app-state.js'
 
 describe('v9 app state', () => {
@@ -31,6 +37,22 @@ describe('v9 app state', () => {
     })
   })
 
+  it('正式实验必须按 consent → profile → training → recognition → reader → complete 前进', () => {
+    const initial = createAppState()
+    const consent = beginFormalExperiment(initial)
+    expect(consent.experiment.formalPhase).toBe('consent')
+    const profile = acceptConsent(consent)
+    expect(profile.experiment.formalPhase).toBe('profile')
+    const training = saveParticipantProfile(profile, { visionStatus: 'sighted' })
+    expect(training.experiment.formalPhase).toBe('training')
+    const recognition = completeTraining(training, { passed: true })
+    expect(recognition.experiment.formalPhase).toBe('recognition')
+    const reader = completeRecognition(recognition)
+    expect(reader.experiment.formalPhase).toBe('reader')
+    expect(completeReader(reader).experiment.formalPhase).toBe('complete')
+    expect(completeReader(reader, 4).experiment.formalPhase).toBe('reader')
+  })
+
   it('默认没有进入正式实验，正式阶段从同意开始', () => {
     const state = createAppState()
     expect(state.experiment.researchMode).toBe('casual')
@@ -51,5 +73,65 @@ describe('v9 app state', () => {
       category: 'pinyin', section: 'syllables', item: 'ba', phase: 'learn', tone: '1'
     })
     expect(next.teaching.tone).toBe('1')
+  })
+})
+
+  it('正式训练失败时停留在 training，四种辨识模式全部完成后才进入 reader', () => {
+    const started = beginFormalExperiment(createAppState(), {
+      participantId: 'participant-1',
+      sessionId: 'session-1'
+    })
+    const consented = acceptConsent(started)
+    const profile = saveParticipantProfile(consented, {
+      visionStatus: 'sighted',
+      brailleExperience: 'none',
+      audioEncodingExperience: 'none'
+    })
+    const failed = completeTraining(profile, { passed: false })
+    expect(failed.experiment.formalPhase).toBe('training')
+    expect(failed.experiment.trainingCompleted).toBe(false)
+    const passed = completeTraining(profile, { passed: true })
+    expect(passed.experiment.formalPhase).toBe('recognition')
+    expect(completeRecognition(passed, ['letters', 'syllables', 'symbols']).experiment.formalPhase).toBe('recognition')
+    expect(completeRecognition(passed, ['digits', 'symbols', 'syllables', 'letters']).experiment.formalPhase).toBe('recognition')
+    expect(completeRecognition(passed, ['letters', 'syllables', 'symbols', 'digits']).experiment.formalPhase).toBe('reader')
+  })
+
+  it('正式实验开始状态保留匿名参与者和会话 ID', () => {
+    const state = beginFormalExperiment(createAppState(), {
+      participantId: 'participant-1',
+      sessionId: 'session-1'
+    })
+    expect(state.experiment).toMatchObject({
+      researchMode: 'formal',
+      formalPhase: 'consent',
+      participantId: 'participant-1',
+      sessionId: 'session-1',
+      consentAccepted: false
+    })
+  })
+
+describe('formal 状态不变量', () => {
+  it('重新开始正式实验会清除旧训练和质量状态', () => {
+    const state = createAppState()
+    const started = beginFormalExperiment(state, { participantId: 'p-1', sessionId: 's-1' })
+    const dirty = {
+      ...started,
+      experiment: {
+        ...started.experiment,
+        profile: { visionStatus: 'blind' },
+        trainingStarted: true,
+        trainingCompleted: true,
+        calibrationPassed: true,
+        calibrationAttempts: 4,
+        qualityFlags: ['calibration-failed']
+      }
+    }
+    const restarted = beginFormalExperiment(dirty, { participantId: 'p-2', sessionId: 's-2' })
+    expect(restarted.experiment).toMatchObject({
+      participantId: 'p-2', sessionId: 's-2', profile: null,
+      trainingStarted: false, trainingCompleted: false,
+      calibrationPassed: null, calibrationAttempts: 0, qualityFlags: []
+    })
   })
 })

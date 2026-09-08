@@ -1,7 +1,17 @@
 // src/app.js —— v9：单一应用壳、四入口、统一事件路由
 import './styles.css'
 import { createStorage, loadSettings, saveSettings } from './storage.js'
-import { createAppState, TOP_LEVEL_PAGES } from './app-state.js'
+import {
+  createAppState,
+  TOP_LEVEL_PAGES,
+  beginFormalExperiment as beginFormalState,
+  acceptConsent,
+  saveParticipantProfile,
+  completeTraining,
+  completeRecognition,
+  completeReader,
+  setExperimentUploadStatus
+} from './app-state.js'
 import { createInputController, keyToPoint } from './input.js'
 import { createProgressStore } from './curriculum.js'
 import { getTeachingCategories, getTeachingSections, getTeachingItems, getTeachingItem, markTeachingLearned, buildItemSpeech } from './teaching.js'
@@ -12,10 +22,27 @@ import { initNotes } from './notes.js'
 import { playAudioBraille, buildCellSequence, unlockAudio } from './audio-braille.js'
 import { speak, speakAndWait, cancelSpeech } from './speech.js'
 import { getLang, setLang, t } from './i18n.js'
-import { validateParticipantProfile, deriveCohort, STUDY_VERSION } from './experiment-protocol.js'
+import {
+  validateParticipantProfile,
+  deriveCohort,
+  STUDY_VERSION,
+  PROTOCOL_VERSION,
+  CLIENT_VERSION,
+  RECOGNITION_BANK_VERSION,
+  READER_BANK_VERSION
+} from './experiment-protocol.js'
+import {
+  saveFormalSession,
+  saveTrial,
+  saveReaderTrial,
+  buildUploadBatch,
+  markUploadResult,
+  exportExperimentData
+} from './experiment-data.js'
 import { toCells, cellsToUnicode, cellsToDiagram, keyHintForCells } from './cells.js'
 import { dotsToUnicode, unicodeToDots } from './braille-engine.js'
 import { buildInputDisplayModel } from './input-display.js'
+import { createSerialQueue } from './async-queue.js'
 
 export { createAppState }
 export function buildPages() { return [...TOP_LEVEL_PAGES] }
@@ -27,6 +54,12 @@ export function buildTopNav(lang = 'zh') {
     { id: 'experiment', label: lang === 'en' ? 'AudioBraille Lab' : 'AudioBraille 实验' },
     { id: 'notes', label: lang === 'en' ? 'Notes' : '笔记' }
   ]
+}
+
+const FORMAL_TRIAL_COUNTS = Object.freeze({ letters: 20, syllables: 20, symbols: 20, digits: 10 })
+
+export function formalTrialCount(mode) {
+  return FORMAL_TRIAL_COUNTS[mode] || 10
 }
 
 export function buildHomeActions() {
@@ -41,6 +74,89 @@ export function appendSpace(existing = '') {
   return `${existing} `
 }
 
+export function buildReaderSpeedHtml({ formal = false, speed = 1 } = {}) {
+  if (formal) return '<span class="formal-speed-lock">正式实验固定 1x</span>'
+  return `<label class="range-label">速度 <input id="reader-speed" type="range" min="0.5" max="5" step="0.5" value="${speed}"><output>${speed}x</output></label>`
+}
+
+export function buildFormalUploadStatusHtml(status = 'idle') {
+  const labels = { idle: '尚未上传', pending: '等待上传', success: '上传成功', error: '上传失败，已保存在本机' }
+  return `<section class="formal-upload-status"><strong>${labels[status] || labels.idle}</strong><div class="button-row"><button class="button button-primary" data-action="experiment-upload">上传正式实验数据</button><button class="button button-quiet" data-action="experiment-export-json">导出实验数据 JSON</button><button class="button button-quiet" data-action="experiment-export-csv">导出实验数据 CSV</button></div></section>`
+}
+
+function formalBase({ sessionId, participantId = null, profile = {}, randomSeed = null, startedAt = null, completedAt = null, qualityFlags = [], analysisEligibility = 'incomplete' } = {}) {
+  return {
+    sessionId,
+    participantId,
+    studyVersion: STUDY_VERSION,
+    protocolVersion: PROTOCOL_VERSION,
+    clientVersion: CLIENT_VERSION,
+    recognitionBankVersion: RECOGNITION_BANK_VERSION,
+    readerBankVersion: READER_BANK_VERSION,
+    dataClass: 'formal',
+    consentAccepted: true,
+    cohort: deriveCohort(profile),
+    profile: {
+      visionStatus: profile.visionStatus,
+      brailleExperience: profile.brailleExperience,
+      audioEncodingExperience: profile.audioEncodingExperience
+    },
+    randomSeed,
+    startedAt,
+    completedAt,
+    qualityFlags: [...qualityFlags],
+    analysisEligibility
+  }
+}
+
+export function buildFormalSessionRecord(options = {}) {
+  return formalBase(options)
+}
+
+export function buildFormalRecognitionRecord({ sessionId, record = {}, analysisEligibility = 'incomplete' } = {}) {
+  return {
+    ...record,
+    eventId: record.eventId || record.trialId,
+    sessionId,
+    dataClass: 'formal',
+    phase: 'formal',
+    studyVersion: record.studyVersion || STUDY_VERSION,
+    protocolVersion: record.protocolVersion || PROTOCOL_VERSION,
+    clientVersion: record.clientVersion || CLIENT_VERSION,
+    bankVersion: record.bankVersion || RECOGNITION_BANK_VERSION,
+    recognitionBankVersion: record.recognitionBankVersion || RECOGNITION_BANK_VERSION,
+    readerBankVersion: record.readerBankVersion || READER_BANK_VERSION,
+    analysisEligibility
+  }
+}
+
+export function buildFormalReaderRecord({ sessionId, record = {}, analysisEligibility = 'incomplete' } = {}) {
+  return {
+    ...record,
+    eventId: record.eventId || record.passageTrialId,
+    sessionId,
+    dataClass: 'formal',
+    phase: 'formal',
+    studyVersion: record.studyVersion || STUDY_VERSION,
+    protocolVersion: record.protocolVersion || PROTOCOL_VERSION,
+    clientVersion: record.clientVersion || CLIENT_VERSION,
+    passageVersion: record.passageVersion || READER_BANK_VERSION,
+    readerBankVersion: record.readerBankVersion || READER_BANK_VERSION,
+    recognitionBankVersion: record.recognitionBankVersion || RECOGNITION_BANK_VERSION,
+    analysisEligibility
+  }
+}
+export function buildFormalConsentHtml() {
+  return '<section class="research-entry"><h2>正式实验：研究说明与同意</h2><p>本实验收集匿名的听觉辨识和听书体验数据，用于研究 AudioBraille 的可用性。你可以随时停止；不同意上传时仍可导出并保留在本机。</p><label><input type="checkbox" data-field="consent"> 我同意匿名实验数据用于研究</label><button class="button button-primary" data-action="research-submit">同意并继续</button></section>'
+}
+
+export function buildFormalProfileHtml() {
+  return '<section class="research-entry"><h2>正式实验：参与者背景</h2><p>以下字段只用于分层分析，可以选择“不愿回答”。</p><label>视力状态<select data-field="visionStatus"><option value="sighted">明眼</option><option value="low-vision">低视力</option><option value="blind">盲人</option><option value="undisclosed">不愿回答</option></select></label><label>盲文经验<select data-field="brailleExperience"><option value="none">没有盲文经验</option><option value="beginner">初学盲文</option><option value="experienced">熟悉盲文</option><option value="undisclosed">不愿回答</option></select></label><label>AudioBraille 经验<select data-field="audioEncodingExperience"><option value="none">没有 AudioBraille 经验</option><option value="some">接触过类似听觉编码</option><option value="audiobraille-trained">完成过 AudioBraille 训练</option><option value="undisclosed">不愿回答</option></select></label><button class="button button-primary" data-action="research-profile-submit">保存背景并进入训练</button></section>'
+}
+
+export function buildFormalCompleteHtml(status = 'idle') {
+  return `<section class="formal-complete"><h2>正式实验已完成</h2><p>正式辨识和三段听书记录已保存在本机。你可以主动上传，或导出后交给研究者。</p>${buildFormalUploadStatusHtml(status)}</section>`
+}
 export function buildResearchEntryHtml() {
   return `<section class="research-entry"><h2>正式实验</h2><p>本实验收集匿名的听觉辨识和听书体验数据，用于研究 AudioBraille 的可用性。你可以随时停止。</p><label><input type="checkbox" data-field="consent"> 我同意匿名实验数据用于研究</label><label>视力状态<select data-field="visionStatus"><option value="sighted">明眼</option><option value="low-vision">低视力</option><option value="blind">盲人</option><option value="undisclosed">不愿回答</option></select></label><label>盲文经验<select data-field="brailleExperience"><option value="none">没有盲文经验</option><option value="beginner">初学盲文</option><option value="experienced">熟悉盲文</option><option value="undisclosed">不愿回答</option></select></label><label>AudioBraille 经验<select data-field="audioEncodingExperience"><option value="none">没有 AudioBraille 经验</option><option value="some">接触过类似听觉编码</option><option value="audiobraille-trained">完成过 AudioBraille 训练</option><option value="undisclosed">不愿回答</option></select></label><button class="button button-primary" data-action="research-submit">进入训练和校准</button></section>`
 }
@@ -169,10 +285,12 @@ export function initApp() {
   let readerPlayStartedAt = null
   let readerReplayCount = 0
   let readerPlayToken = 0
+  let activeReaderGeneration = null
   const reader = createReader({ onTick: (position, total) => {
     const el = document.querySelector('#reader-progress')
     if (el) el.textContent = `${position} / ${total}`
-  }, onComplete: () => {
+  }, onComplete: ({ generation } = {}) => {
+    if (generation !== activeReaderGeneration) return
     readerCompleted = true
     readerTrialRecord = createReaderTrialRecord({
       passageId: selectedReaderPassage.passageId,
@@ -202,42 +320,169 @@ export function initApp() {
   let experimentToken = 0
   let gateOpen = false
   let experimentEntryError = ''
+  let formalSession = null
+  let formalSessionSeed = null
+  let formalRecognitionIndex = 0
+  let formalReaderIndex = 0
+  const formalRecognitionModes = ['letters', 'syllables', 'symbols', 'digits']
+  let readerSummaryConfirmed = false
+  let readerFinalizing = false
+  let formalPersistenceFailed = false
+  const formalPersistenceQueue = createSerialQueue()
+
 
   function createSessionId(prefix) {
     if (globalThis.crypto?.randomUUID) return `${prefix}-${globalThis.crypto.randomUUID()}`
     return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
   }
 
-  function beginFormalExperiment() {
-    const consent = document.querySelector('[data-field="consent"]')?.checked === true
+  async function saveCurrentFormalSession(overrides = {}) {
+    if (!formalSession) return false
+    const snapshot = { ...formalSession, ...overrides }
+    formalSession = snapshot
+    try {
+      await formalPersistenceQueue.enqueue(() => saveFormalSession(storage, snapshot))
+      return true
+    } catch (error) {
+      formalPersistenceFailed = true
+      experimentEntryError = error.message || '正式实验记录保存失败。'
+      return false
+    }
+  }
+
+  async function persistRecognitionRecord(record) {
+    if (state.experiment.researchMode !== 'formal' || !record || !formalSession) return false
+    const event = buildFormalRecognitionRecord({
+      sessionId: formalSession.sessionId,
+      record,
+      analysisEligibility: formalSession.analysisEligibility
+    })
+    try {
+      await formalPersistenceQueue.enqueue(() => saveTrial(storage, event))
+      return true
+    } catch (error) {
+      formalPersistenceFailed = true
+      experimentEntryError = error.message || '正式辨识记录保存失败。'
+      return false
+    }
+  }
+
+  async function persistReaderRecord(record) {
+    if (state.experiment.researchMode !== 'formal' || !record || !formalSession) return false
+    const event = buildFormalReaderRecord({
+      sessionId: formalSession.sessionId,
+      record,
+      analysisEligibility: formalSession.analysisEligibility
+    })
+    try {
+      await formalPersistenceQueue.enqueue(() => saveReaderTrial(storage, event))
+      return true
+    } catch (error) {
+      formalPersistenceFailed = true
+      experimentEntryError = error.message || '正式听书记录保存失败。'
+      return false
+    }
+  }
+
+  async function uploadFormalData() {
+    state = setExperimentUploadStatus(state, 'pending')
+    render()
+    let batch = null
+    try {
+      await formalPersistenceQueue.idle()
+      if (formalPersistenceFailed) throw new Error('正式实验记录保存失败，请检查本机存储后重试。')
+      batch = await buildUploadBatch(storage)
+      if (!batch.sessions.length) throw new Error('没有等待上传的正式实验数据。')
+      const response = await fetch('/api/experiment', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(batch)
+      })
+      if (!response.ok) throw new Error(`上传失败（${response.status}）`)
+      await markUploadResult(storage, batch, { ok: true })
+      state = setExperimentUploadStatus(state, 'success')
+    } catch (error) {
+      if (batch) await markUploadResult(storage, batch, { ok: false, error: error.message })
+      state = setExperimentUploadStatus(state, 'error')
+      experimentEntryError = error.message || '上传失败，数据已保存在本机。'
+    }
+    render()
+  }
+
+  async function exportFormalData(format) {
+    const content = await exportExperimentData(storage, format)
+    const blob = new Blob([content], { type: format === 'csv' ? 'text/csv;charset=utf-8' : 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `audiobraille-experiment-${Date.now()}.${format}`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function enterFormalExperiment() {
+    const participantId = createSessionId('participant')
+    const sessionId = createSessionId('session')
+    formalSessionSeed = createSessionId('seed')
+    formalRecognitionIndex = 0
+    formalReaderIndex = 0
+    readerSummaryConfirmed = false
+    formalSession = null
+    formalPersistenceFailed = false
+    readerPassages = sampleReaderPassages(READER_PASSAGES, 3, sessionId)
+    reader.setSpeed(1)
+    selectedReaderPassage = readerPassages[0]
+    experimentEntryError = ''
+    state = beginFormalState(state, { participantId, sessionId })
+    state = { ...state, page: 'experiment', experimentTab: 'recognition' }
+    return true
+  }
+
+  function acceptFormalConsent() {
+    if (document.querySelector('[data-field="consent"]')?.checked !== true) {
+      experimentEntryError = '开始正式实验前，请先同意匿名数据用于研究。'
+      return false
+    }
+    state = acceptConsent(state)
+    experimentEntryError = ''
+    return true
+  }
+
+  function createFormalRecognitionModel(mode) {
+    return createExperimentModel({
+      trialCount: formalTrialCount(mode),
+      dataClass: 'formal',
+      studyVersion: STUDY_VERSION,
+      consentAccepted: true,
+      participantId: state.experiment.participantId,
+      sessionId: state.experiment.sessionId
+    })
+  }
+
+  async function submitFormalProfile() {
     const profile = {
       visionStatus: document.querySelector('[data-field="visionStatus"]')?.value,
       brailleExperience: document.querySelector('[data-field="brailleExperience"]')?.value,
       audioEncodingExperience: document.querySelector('[data-field="audioEncodingExperience"]')?.value
     }
-    if (!consent) {
-      experimentEntryError = '开始正式实验前，请先同意匿名数据用于研究。'
-      return false
-    }
     if (!validateParticipantProfile(profile).valid) {
       experimentEntryError = '请完成参与者背景字段。'
       return false
     }
-    const participantId = createSessionId('participant')
-    const sessionId = createSessionId('session')
-    experiment = createExperimentModel({
-      trialCount: 10,
-      dataClass: 'formal',
-      studyVersion: STUDY_VERSION,
-      consentAccepted: true,
-      participantId,
-      sessionId
+    state = saveParticipantProfile(state, profile)
+    formalSession = buildFormalSessionRecord({
+      participantId: state.experiment.participantId,
+      sessionId: state.experiment.sessionId,
+      profile,
+      randomSeed: formalSessionSeed,
+      startedAt: new Date().toISOString(),
+      qualityFlags: [],
+      analysisEligibility: 'incomplete'
     })
-    experimentEntryError = ''
-    readerPassages = sampleReaderPassages(READER_PASSAGES, 3, sessionId)
-    selectedReaderPassage = readerPassages[0]
-    state = { ...state, experiment: { ...state.experiment, researchMode: 'formal', formalPhase: 'training', participantId, sessionId, profile: { ...profile, cohort: deriveCohort(profile) }, consentAccepted: true } }
+    experiment = createFormalRecognitionModel(formalRecognitionModes[formalRecognitionIndex])
     experiment.startTraining()
+    experimentEntryError = ''
+    await saveCurrentFormalSession()
     return true
   }
 
@@ -339,18 +584,31 @@ export function initApp() {
 
   function renderExperiment() {
     const model = experiment.snapshot()
-    if (state.experiment.researchMode === 'entry') {
-      return `<section class="page page-experiment"><div class="page-heading"><div><p class="eyebrow">AUDIOBRAILLE LAB</p><h1>AudioBraille 实验</h1></div></div><button class="button button-quiet" data-action="research-cancel">返回试玩实验</button>${buildResearchEntryHtml()}${experimentEntryError ? `<p class="form-error" role="alert">${esc(experimentEntryError)}</p>` : ''}</section>`
+    const heading = '<div class="page-heading"><div><p class="eyebrow">AUDIOBRAILLE LAB</p><h1>AudioBraille 实验</h1></div></div>'
+    if (state.experiment.researchMode === 'formal') {
+      if (state.experiment.formalPhase === 'consent') {
+        return `<section class="page page-experiment">${heading}<button class="button button-quiet" data-action="research-cancel">返回试玩实验</button>${buildFormalConsentHtml()}${experimentEntryError ? `<p class="form-error" role="alert">${esc(experimentEntryError)}</p>` : ''}</section>`
+      }
+      if (state.experiment.formalPhase === 'profile') {
+        return `<section class="page page-experiment">${heading}<button class="button button-quiet" data-action="research-cancel">返回试玩实验</button>${buildFormalProfileHtml()}${experimentEntryError ? `<p class="form-error" role="alert">${esc(experimentEntryError)}</p>` : ''}</section>`
+      }
+      if (state.experiment.formalPhase === 'complete') {
+        return `<section class="page page-experiment">${heading}${buildFormalCompleteHtml(state.experiment.uploadStatus)}${experimentEntryError ? `<p class="form-error" role="alert">${esc(experimentEntryError)}</p>` : ''}</section>`
+      }
     }
-    return `<section class="page page-experiment"><div class="page-heading"><div><p class="eyebrow">AUDIOBRAILLE LAB</p><h1>AudioBraille 实验</h1><p class="lead">测试一种通过空间音频聆听盲文的新途径。</p></div></div><div class="tabs"><button class="tab${state.experimentTab === 'recognition' ? ' is-active' : ''}" data-action="experiment-tab" data-tab="recognition">听觉辨识</button><button class="tab${state.experimentTab === 'reader' ? ' is-active' : ''}" data-action="experiment-tab" data-tab="reader">听书场景</button></div>${state.experimentTab === 'recognition' ? renderRecognition(model) : renderReader()}</section>`
+    return `<section class="page page-experiment">${heading}<p class="lead">测试一种通过空间音频聆听盲文的新途径。</p><div class="tabs"><button class="tab${state.experimentTab === 'recognition' ? ' is-active' : ''}" data-action="experiment-tab" data-tab="recognition">听觉辨识</button><button class="tab${state.experimentTab === 'reader' ? ' is-active' : ''}" data-action="experiment-tab" data-tab="reader">听书场景</button></div>${state.experimentTab === 'recognition' ? renderRecognition(model) : renderReader()}</section>`
   }
 
   function renderRecognition(model) {
     const modes = [['letters', '字母'], ['syllables', '拼音音节'], ['symbols', '符号'], ['digits', '数字']]
-    let body = `<p>选择试玩或进入正式实验。正式实验会先完成统一训练和校准。</p><div class="mode-picker">${modes.map(([id, label]) => `<button class="mode-chip${model.mode === id ? ' is-active' : ''}" data-action="experiment-mode" data-mode="${id}">${label}</button>`).join('')}</div>`
+    const formal = state.experiment.researchMode === 'formal'
+    const activeMode = formalRecognitionModes[formalRecognitionIndex]
+    let body = formal
+      ? `<p>正式辨识按固定顺序完成四类模式：第 ${formalRecognitionIndex + 1} / ${formalRecognitionModes.length} 类（${modes.find(([id]) => id === activeMode)?.[1] || activeMode}）。</p><div class="mode-picker"><span class="mode-chip is-active">${modes.find(([id]) => id === activeMode)?.[1] || activeMode}</span></div>`
+      : `<p>选择试玩或进入正式实验。正式实验会先完成统一训练和校准。</p><div class="mode-picker">${modes.map(([id, label]) => `<button class="mode-chip${model.mode === id ? ' is-active' : ''}" data-action="experiment-mode" data-mode="${id}">${label}</button>`).join('')}</div>`
     if (model.stage === 'idle') {
-      if (state.experiment.researchMode === 'formal' && state.experiment.formalPhase === 'recognition') body += `<button class="button button-primary" data-action="experiment-start">开始正式辨识</button>`
-      else body += `<button class="button button-primary" data-action="experiment-start">开始试玩一轮</button><button class="button button-secondary" data-action="research-entry">进入正式实验</button>`
+      if (formal && state.experiment.formalPhase === 'recognition') body += `<button class="button button-primary" data-action="experiment-start">开始正式辨识</button>`
+      else if (!formal) body += `<button class="button button-primary" data-action="experiment-start">开始试玩一轮</button><button class="button button-secondary" data-action="research-entry">进入正式实验</button>`
     }
     if (model.stage === 'training') body += `<div class="experiment-status"><strong>统一训练和校准</strong><p>请先听完整规则、六个单点和多点示例，再完成固定校准题。训练数据不会计入正式结果。</p><button class="button button-success" data-action="research-calibration-pass">校准通过</button><button class="button button-quiet" data-action="research-calibration-fail">需要重试</button></div>`
     if (model.stage === 'showcase') body += `<div class="experiment-status"><strong>展示阶段</strong><p>先听一次完整说明，随后依次播放六个声音。当前：<span id="showcase-current">准备开始</span></p><button class="button button-primary" data-action="experiment-confirm">我已听完展示，进入测试</button></div>`
@@ -359,8 +617,13 @@ export function initApp() {
       body += `<div class="experiment-status"><strong>第 ${model.index + 1} / ${model.trials.length} 题</strong><p>${model.stage === 'listen' ? '按 0 或点击按钮听音频。' : '输入听到的盲文方，按 0 提交。'}</p><button class="button button-primary" data-action="experiment-listen">${model.stage === 'listen' ? '播放本题音频' : '重听本题'}</button>${inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, state.input.cursorIndex, '实验输入盲文点位')}</div>`
       if (trial) body += `<p class="sr-only">本题需要 ${trial.cells.length} 方</p>`
     }
-    if (model.stage === 'done') body += `<div class="experiment-status"><h2>本轮完成</h2><p>正确 ${model.results.filter(result => result.correct).length} / ${model.results.length}</p><button class="button button-primary" data-action="experiment-restart">再来一轮</button></div>`
+    if (model.stage === 'done') {
+      if (formal && formalRecognitionIndex < formalRecognitionModes.length - 1) body += `<div class="experiment-status"><h2>本类完成</h2><p>正确 ${model.results.filter(result => result.correct).length} / ${model.results.length}</p><button class="button button-primary" data-action="experiment-next-formal-mode">进入下一类</button></div>`
+      else if (formal) body += `<div class="experiment-status"><h2>四类辨识完成</h2><p>正式辨识记录已保存，接下来进入听书。</p><button class="button button-primary" data-action="experiment-finish-recognition">进入听书</button></div>`
+      else body += `<div class="experiment-status"><h2>本轮完成</h2><p>正确 ${model.results.filter(result => result.correct).length} / ${model.results.length}</p><button class="button button-primary" data-action="experiment-restart">再来一轮</button></div>`
+    }
     if (model.blocked) body += `<p class="form-error" role="alert">正式实验需要先完成同意和身份字段。</p>`
+    if (experimentEntryError) body += `<p class="form-error" role="alert">${esc(experimentEntryError)}</p>`
     return `<div class="experiment-panel">${body}</div>`
   }
 
@@ -369,9 +632,8 @@ export function initApp() {
     const input = state.input
     const composition = input.compositionCells || input.confirmedCells
     const compositionCursor = input.compositionCursor ?? input.cursorIndex
-    const passageOptions = readerPassages.map(passage => `<option value="${passage.passageId}"${passage.passageId === selectedReaderPassage.passageId ? ' selected' : ''}>${esc(passage.title)} · ${passage.lengthStratum}</option>`).join('')
     const formalReader = state.experiment.researchMode === 'formal'
-    return `<div class="reader-panel"><h2>听书场景</h2><p>选择一段材料，播放完成后再填写理解反馈。</p>${formalReader ? `<label>材料<select id="reader-passage">${passageOptions}</select></label><p class="reader-passage-meta">${esc(selectedReaderPassage.topicStratum)} · ${esc(selectedReaderPassage.difficultyStratum)}</p><p>${esc(selectedReaderPassage.text)}</p>` : ''}<div class="reader-input-preview">${inputDisplayHtml(composition, input.currentDots, compositionCursor, '当前多方输入')}</div>${formalReader ? '' : buildTextareaDocumentHtml(currentReaderText, { id: 'reader-text', rows: 4, label: '盲文内容' })}<label class="range-label">速度 <input id="reader-speed" type="range" min="0.5" max="5" step="0.5" value="${reader.getSpeed()}"><output>${reader.getSpeed()}x</output></label><div class="button-row"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-pause">暂停</button><button class="button button-quiet" data-action="reader-resume">继续</button><button class="button button-quiet" data-action="reader-stop">停止</button></div><div id="reader-progress" aria-live="polite"></div>${buildReaderComprehensionHtml({ completed: readerCompleted, understood: readerUnderstood, summaryText: readerSummary })}</div>`
+    return `<div class="reader-panel"><h2>听书场景</h2><p>播放当前材料，完成后再填写理解反馈。</p>${formalReader ? `<p class="reader-passage-meta">第 ${formalReaderIndex + 1} / ${readerPassages.length} 段材料 · ${esc(selectedReaderPassage.topicStratum)} · ${esc(selectedReaderPassage.difficultyStratum)}</p>` : ''}<div class="reader-input-preview">${inputDisplayHtml(composition, input.currentDots, compositionCursor, '当前多方输入')}</div>${formalReader ? '' : buildTextareaDocumentHtml(currentReaderText, { id: 'reader-text', rows: 4, label: '盲文内容' })}${buildReaderSpeedHtml({ formal: formalReader, speed: formalReader ? 1 : reader.getSpeed() })}<div class="button-row"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-pause">暂停</button><button class="button button-quiet" data-action="reader-resume">继续</button><button class="button button-quiet" data-action="reader-stop">停止</button></div><div id="reader-progress" aria-live="polite"></div>${buildReaderComprehensionHtml({ completed: readerCompleted, understood: readerUnderstood, summaryText: readerSummary })}${experimentEntryError ? `<p class="form-error" role="alert">${esc(experimentEntryError)}</p>` : ""}</div>`
   }
 
   function renderNotes() {
@@ -442,6 +704,7 @@ export function initApp() {
     })
     const readerPassage = document.querySelector('#reader-passage')
     readerPassage?.addEventListener('change', () => {
+      activeReaderGeneration = null
       reader.stop()
       readerPlayToken += 1
       selectedReaderPassage = readerPassages.find(passage => passage.passageId === readerPassage.value) || readerPassages[0]
@@ -579,8 +842,15 @@ export function initApp() {
       void commitLearning(cells)
     } else if (state.page === 'experiment' && state.experimentTab === 'recognition' && experiment.snapshot().stage === 'answer') {
       const result = experiment.submit(cells)
-      if (result.state?.stage === 'done' && state.experiment.researchMode === 'formal') {
-        state = { ...state, experiment: { ...state.experiment, formalPhase: 'reader' } }
+      if (state.experiment.researchMode === 'formal') {
+        const savePromise = persistRecognitionRecord(result.record)
+        void savePromise.then(saved => {
+          if (saved && result.state?.stage === 'done') {
+            const completedModes = [...new Set([...state.experiment.formalRecognitionModesCompleted, result.record.mode])]
+            state = { ...state, experiment: { ...state.experiment, formalRecognitionModesCompleted: completedModes } }
+          }
+          render()
+        })
       }
       speak(result.correct ? '正确' : `错误，正确答案是 ${experiment.snapshot().trials[experiment.snapshot().index - 1]?.label || ''}`)
     } else if (state.page === 'learning' && state.learningTab === 'input') {
@@ -597,7 +867,47 @@ export function initApp() {
     }
   }
 
-  function onAction(event) {
+  async function finalizeFormalReaderTrial(understood, summaryText = '') {
+    if (state.experiment.researchMode !== 'formal' || !readerTrialRecord || !formalSession || readerFinalizing) return
+    readerFinalizing = true
+    try {
+      const summary = typeof summaryText === 'string' ? summaryText : ''
+      const record = {
+        ...readerTrialRecord,
+        selfReportedUnderstood: Boolean(understood),
+        summaryText: understood === true ? summary : '',
+        summarySubmitted: understood === true && summary.trim().length > 0
+      }
+      const saved = await persistReaderRecord(record)
+      if (!saved) {
+        render()
+        return
+      }
+      formalReaderIndex += 1
+      readerSummaryConfirmed = true
+      if (formalReaderIndex >= readerPassages.length) {
+        state = completeReader(state, formalReaderIndex)
+        await saveCurrentFormalSession({
+          completedAt: new Date().toISOString(),
+          analysisEligibility: 'eligible',
+          qualityFlags: state.experiment.qualityFlags
+        })
+      } else {
+        selectedReaderPassage = readerPassages[formalReaderIndex]
+        readerCompleted = false
+        readerUnderstood = null
+        readerSummary = ''
+        readerTrialRecord = null
+        readerPlayStartedAt = null
+        readerReplayCount = 0
+      }
+      render()
+    } finally {
+      readerFinalizing = false
+    }
+  }
+
+  async function onAction(event) {
     const target = event.target.closest('[data-action]')
     if (!target) return
     const action = target.dataset.action
@@ -605,9 +915,10 @@ export function initApp() {
     if (action === 'home') state = { ...state, page: 'home' }
     else if (action === 'learning') state = { ...state, page: 'learning', learningTab: 'teaching' }
     else if (action === 'experiment') state = { ...state, page: 'experiment', experiment: { ...state.experiment, researchMode: state.experiment.researchMode === 'formal' ? 'formal' : 'casual' } }
-    else if (action === 'research-entry') { experimentEntryError = ''; state = { ...state, page: 'experiment', experiment: { ...state.experiment, researchMode: 'entry' } } }
-    else if (action === 'research-cancel') { experimentEntryError = ''; state = { ...state, experiment: { ...state.experiment, researchMode: 'casual', formalPhase: null } } }
-    else if (action === 'research-submit') { beginFormalExperiment() }
+    else if (action === 'research-entry') { enterFormalExperiment() }
+    else if (action === 'research-cancel') { experimentEntryError = ''; formalSession = null; experiment = createExperimentModel({ trialCount: 10 }); state = { ...state, experiment: { ...createAppState().experiment } } }
+    else if (action === 'research-submit') { acceptFormalConsent() }
+    else if (action === 'research-profile-submit') { void submitFormalProfile().then(() => render()) }
     else if (action === 'notes') state = { ...state, page: 'notes' }
     else if (action === 'guide') document.querySelector('.guide-fold')?.setAttribute('open', '')
     else if (action === 'toggle-language') {
@@ -645,16 +956,27 @@ export function initApp() {
       state = { ...state, teaching: { ...state.teaching, item: next.current || state.teaching.item } }
     } else if (action === 'experiment-mode') { experimentToken++; cancelSpeech(); experiment.selectMode(target.dataset.mode); state = { ...state, input: { confirmedCells: [], currentDots: [] } } }
     else if (action === 'experiment-start') {
-      const phase = state.experiment.researchMode === 'formal' ? 'formal' : 'casual'
-      experiment.start(undefined, { seed: createSessionId('seed'), phase })
-      state = { ...state, experiment: { ...state.experiment, formalPhase: phase === 'formal' ? 'recognition' : state.experiment.formalPhase }, input: { confirmedCells: [], currentDots: [] } }
+      const formal = state.experiment.researchMode === 'formal'
+      const mode = formal ? formalRecognitionModes[formalRecognitionIndex] : undefined
+      const phase = formal ? 'formal' : 'casual'
+      const seed = formal ? `${formalSessionSeed}:${mode}` : createSessionId('seed')
+      experiment.start(mode, { seed, phase })
+      state = { ...state, input: { confirmedCells: [], currentDots: [] } }
       void playShowcase()
     }
     else if (action === 'research-calibration-pass' || action === 'research-calibration-fail') {
       const passed = action === 'research-calibration-pass'
       experiment.completeCalibration(passed)
       if (!passed) experiment.startTraining()
-      state = { ...state, experiment: { ...state.experiment, formalPhase: passed ? 'recognition' : 'training', trainingStarted: true, trainingCompleted: true, calibrationPassed: passed } }
+      state = completeTraining(state, { passed })
+      void saveCurrentFormalSession({
+        trainingStarted: true,
+        trainingCompleted: passed,
+        calibrationPassed: passed,
+        calibrationAttempts: state.experiment.calibrationAttempts,
+        qualityFlags: state.experiment.qualityFlags,
+        analysisEligibility: passed ? 'incomplete' : 'calibration-failed'
+      })
     }
     else if (action === 'experiment-confirm') { experimentToken++; cancelSpeech(); experiment.confirmShowcase(); render() }
     else if (action === 'experiment-listen') {
@@ -666,27 +988,72 @@ export function initApp() {
       render()
     }
     else if (action === 'experiment-restart') { experiment.restart(); state = { ...state, input: { confirmedCells: [], currentDots: [] } } }
+    else if (action === 'experiment-next-formal-mode') {
+      await formalPersistenceQueue.idle()
+      if (formalPersistenceFailed) {
+        experimentEntryError = '正式辨识记录尚未可靠保存，暂不能进入下一类。'
+      } else if (state.experiment.researchMode === 'formal' && experiment.snapshot().stage === 'done') {
+        formalRecognitionIndex += 1
+        experiment = createFormalRecognitionModel(formalRecognitionModes[formalRecognitionIndex])
+        state = { ...state, input: { confirmedCells: [], currentDots: [] } }
+      }
+    }
+    else if (action === 'experiment-finish-recognition') {
+      await formalPersistenceQueue.idle()
+      if (formalPersistenceFailed) {
+        experimentEntryError = '正式辨识记录尚未可靠保存，暂不能进入听书。'
+      } else if (state.experiment.researchMode === 'formal' && formalRecognitionIndex === formalRecognitionModes.length - 1 && state.experiment.formalRecognitionModesCompleted.length === formalRecognitionModes.length) {
+        state = completeRecognition(state, formalRecognitionModes)
+        state = { ...state, experimentTab: 'reader', input: { confirmedCells: [], currentDots: [] } }
+      }
+    }
     else if (action === 'reader-play') {
       if (state.experiment.researchMode === 'formal' && state.experiment.formalPhase !== 'reader') return
       readerCompleted = false
       readerUnderstood = null
       readerSummary = ''
       readerTrialRecord = null
-      readerReplayCount = reader.snapshot().position > 0 ? readerReplayCount + 1 : 0
+      readerReplayCount = readerPlayStartedAt ? readerReplayCount + 1 : 0
       readerPlayStartedAt = Date.now()
+      activeReaderGeneration = null
       reader.stop()
       readerPlayToken += 1
       const playToken = readerPlayToken
+      if (state.experiment.researchMode === 'formal') reader.setSpeed(1)
       const playText = state.experiment.researchMode === 'formal' ? selectedReaderPassage.brailleCells : (document.querySelector('#reader-text')?.value || SAMPLE_BRAILLE)
       currentReaderText = Array.isArray(playText) ? playText.map(dots => dotsToUnicode(dots)).join('') : playText
-      void reader.play(playText).then(() => { if (playToken !== readerPlayToken) readerCompleted = false })
+      activeReaderGeneration = reader.snapshot().generation + 1
+      const playPromise = reader.play(playText)
+      activeReaderGeneration = reader.snapshot().generation
+      void playPromise.then(() => { if (playToken !== readerPlayToken) readerCompleted = false })
     }
-    else if (action === 'reader-stop') { reader.stop(); readerPlayToken += 1; readerCompleted = false; readerTrialRecord = null }
+    else if (action === 'reader-stop') { activeReaderGeneration = null; reader.stop(); readerPlayToken += 1; readerCompleted = false; readerTrialRecord = null }
     else if (action === 'reader-pause') reader.pause()
     else if (action === 'reader-resume') reader.resume()
-    else if (action === 'reader-understood') { readerUnderstood = true; if (readerTrialRecord) readerTrialRecord = { ...readerTrialRecord, selfReportedUnderstood: true }; render() }
-    else if (action === 'reader-not-understood') { readerUnderstood = false; if (readerTrialRecord) readerTrialRecord = { ...readerTrialRecord, selfReportedUnderstood: false }; render() }
-    else if (action === 'reader-summary-submit') { readerSummary = document.querySelector('#reader-summary')?.value || ''; if (readerTrialRecord) readerTrialRecord = { ...readerTrialRecord, summaryText: readerSummary, summarySubmitted: readerSummary.trim().length > 0 }; render() }
+    else if (action === 'reader-understood') {
+      readerUnderstood = true
+      if (readerTrialRecord) readerTrialRecord = { ...readerTrialRecord, selfReportedUnderstood: true }
+      render()
+    }
+    else if (action === 'reader-not-understood') {
+      readerUnderstood = false
+      if (readerTrialRecord) readerTrialRecord = { ...readerTrialRecord, selfReportedUnderstood: false }
+      if (state.experiment.researchMode === 'formal') void finalizeFormalReaderTrial(false)
+      else render()
+    }
+    else if (action === 'reader-summary-skip') {
+      if (state.experiment.researchMode === 'formal') void finalizeFormalReaderTrial(true, '')
+      else render()
+    }
+    else if (action === 'reader-summary-submit') {
+      readerSummary = document.querySelector('#reader-summary')?.value || ''
+      if (readerTrialRecord) readerTrialRecord = { ...readerTrialRecord, summaryText: readerSummary, summarySubmitted: readerSummary.trim().length > 0 }
+      if (state.experiment.researchMode === 'formal') void finalizeFormalReaderTrial(true, readerSummary)
+      else render()
+    }
+    else if (action === 'experiment-upload') { void uploadFormalData() }
+    else if (action === 'experiment-export-json') { void exportFormalData('json') }
+    else if (action === 'experiment-export-csv') { void exportFormalData('csv') }
     else if (action === 'notes-save') void notes.save()
     else if (action === 'notes-play-text') { noteText = document.querySelector('#note-textarea')?.value || ''; void notes.readAloud('tts') }
     else if (action === 'notes-play-audio') { noteText = document.querySelector('#note-textarea')?.value || ''; void notes.readAloud('braille', Number(document.querySelector('#notes-speed')?.value || 1)) }

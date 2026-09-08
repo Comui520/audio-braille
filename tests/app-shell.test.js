@@ -5,7 +5,12 @@ import {
   buildTextareaDocumentHtml,
   buildTonePickerHtml,
   buildLearningPlayback,
-  buildResearchEntryHtml
+  buildResearchEntryHtml,
+  buildFormalConsentHtml,
+  buildFormalProfileHtml,
+  buildFormalCompleteHtml,
+  buildReaderSpeedHtml,
+  buildFormalUploadStatusHtml
 } from '../src/app.js'
 
 describe('v12 应用壳', () => {
@@ -33,6 +38,25 @@ describe('v12 应用壳', () => {
     expect(html).toContain('data-action="research-submit"')
   })
 
+
+  it('正式听书固定 1 倍速，试玩听书保留倍速控制', () => {
+    expect(buildReaderSpeedHtml({ formal: true, speed: 3 })).toContain('正式实验固定 1x')
+    expect(buildReaderSpeedHtml({ formal: true, speed: 3 })).not.toContain('type="range"')
+    expect(buildReaderSpeedHtml({ formal: false, speed: 2 })).toContain('type="range"')
+  })
+  it('正式实验提供上传状态和本地导出入口', () => {
+    const html = buildFormalUploadStatusHtml('pending')
+    expect(html).toContain('导出实验数据')
+    expect(html).toContain('等待上传')
+  })
+
+
+  it('正式流程页面按阶段提供同意、背景和完成操作', () => {
+    expect(buildFormalConsentHtml()).toContain('data-field="consent"')
+    expect(buildFormalConsentHtml()).toContain('data-action="research-submit"')
+    expect(buildFormalProfileHtml()).toContain('data-action="research-profile-submit"')
+    expect(buildFormalCompleteHtml('pending')).toContain('data-action="experiment-upload"')
+  })
   it('音节单项包含五种声调选择', () => {
     const html = buildTonePickerHtml('1')
     expect(html).toContain('data-action="teaching-tone"')
