@@ -10,7 +10,8 @@ import {
   buildFormalProfileHtml,
   buildFormalCompleteHtml,
   buildReaderSpeedHtml,
-  buildFormalUploadStatusHtml
+  buildFormalUploadStatusHtml,
+  buildExamReferenceMaskHtml
 } from '../src/app.js'
 
 describe('v12 应用壳', () => {
@@ -67,6 +68,12 @@ describe('v12 应用壳', () => {
     expect(html).toContain('无调')
   })
 
+  it('考试答案遮罩提供可访问的查看按钮', () => {
+    const html = buildExamReferenceMaskHtml()
+    expect(html).toContain('lesson-reference-mask')
+    expect(html).toContain('data-action="teaching-show-reference"')
+    expect(html).toContain('查看')
+  })
   it('学习 AudioBraille 播放计划不包含 TTS', () => {
     expect(buildLearningPlayback({ cells: [[1, 2]], label: 'b' })).toEqual({
       cells: [[1, 2]],

@@ -84,7 +84,9 @@ kbd { display: inline-block; min-width: 1.7em; padding: .12em .35em; border: 1px
 .item-chip.is-learned { border-color: var(--success); color: var(--success); }
 .item-chip.is-current, .mode-chip.is-active { border-color: var(--brand); background: #eef3ff; color: var(--brand); font-weight: 750; }
 
-.lesson-layout { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(280px, 1.2fr) auto; align-items: center; gap: 1.5rem; margin: 1.5rem 0; padding: 1.5rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.lesson-layout { position: relative; display: grid; grid-template-columns: minmax(180px, .8fr) minmax(280px, 1.2fr) auto; align-items: center; gap: 1.5rem; margin: 1.5rem 0; padding: 1.5rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.lesson-layout.is-exam-concealed > :not(.lesson-reference-mask) { visibility: hidden; user-select: none; }
+.lesson-reference-mask { position: absolute; inset: 0; display: grid; place-items: center; }
 .lesson-note { color: var(--text-muted); }
 .lesson-braille { display: grid; grid-template-columns: auto auto; align-items: center; gap: .75rem 1.2rem; }
 .lesson-unicode { grid-row: span 2; color: var(--brand); font-family: "Segoe UI Symbol", sans-serif; font-size: 4rem; line-height: 1; }

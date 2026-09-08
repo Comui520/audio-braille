@@ -64,10 +64,16 @@ describe('v9 app state', () => {
     const next = setTeachingLocation(state, {
       category: 'latin', section: 'l1', item: 'f', phase: 'learn'
     })
-    expect(next.teaching).toEqual({ category: 'latin', section: 'l1', item: 'f', phase: 'learn', tone: null })
-    expect(state.teaching).toEqual({ category: null, section: null, item: null, phase: 'learn', tone: null })
+    expect(next.teaching).toEqual({ category: 'latin', section: 'l1', item: 'f', phase: 'learn', tone: null, examReferenceVisible: false })
+    expect(state.teaching).toEqual({ category: null, section: null, item: null, phase: 'learn', tone: null, examReferenceVisible: false })
   })
 
+  it('考试教学位置默认隐藏参考答案', () => {
+    const next = setTeachingLocation(createAppState(), {
+      category: 'latin', section: 'l1', item: 'f', phase: 'exam'
+    })
+    expect(next.teaching.examReferenceVisible).toBe(false)
+  })
   it('教学状态保存音节声调选择', () => {
     const next = setTeachingLocation(createAppState(), {
       category: 'pinyin', section: 'syllables', item: 'ba', phase: 'learn', tone: '1'

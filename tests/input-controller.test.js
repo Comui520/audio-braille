@@ -11,6 +11,20 @@ describe('v9 可控逐方输入器', () => {
     expect(speeches).toEqual([])
   })
 
+  it('重复按同一点位键会取消该点，同时保留其他点', () => {
+    const input = createInputController()
+    input.handleKey('1')
+    expect(input.snapshot().currentDots).toEqual([3])
+
+    input.handleKey('7')
+    expect(input.snapshot().currentDots).toEqual([1, 3])
+
+    input.handleKey('1')
+    expect(input.snapshot().currentDots).toEqual([1])
+
+    input.handleKey('7')
+    expect(input.snapshot().currentDots).toEqual([])
+  })
   it('* 确认当前方并移动到下一方', () => {
     const input = createInputController()
     input.handleKey('7')

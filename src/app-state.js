@@ -9,7 +9,7 @@ export function createAppState() {
     page: 'home',
     learningTab: 'teaching',
     experimentTab: 'recognition',
-    teaching: { category: null, section: null, item: null, phase: 'learn', tone: null },
+    teaching: { category: null, section: null, item: null, phase: 'learn', tone: null, examReferenceVisible: false },
     input: { confirmedCells: [], currentDots: [], cursorIndex: 0 },
     experiment: {
       mode: 'letters', stage: 'idle', trials: [], index: 0, results: [],
@@ -126,7 +126,8 @@ export function setTeachingLocation(state, location) {
     section: location.section ?? null,
     item: location.item ?? null,
     phase: location.phase ?? 'learn',
-    tone: location.tone ?? null
+    tone: location.tone ?? null,
+    examReferenceVisible: false
   }
   return { ...state, teaching: next }
 }

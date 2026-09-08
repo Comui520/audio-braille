@@ -209,6 +209,10 @@ export function buildTonePickerHtml(selected = null) {
   return `<div class="tone-picker" role="group" aria-label="选择声调">${tones.map(([tone, label]) => `<button class="tone-option${selected === tone ? ' is-active' : ''}" data-action="teaching-tone" data-tone="${tone ?? ''}">${label}</button>`).join('')}</div>`
 }
 
+export function buildExamReferenceMaskHtml() {
+  return '<div class="lesson-reference-mask"><button class="button button-quiet" data-action="teaching-show-reference" aria-label="查看教学参考">查看</button></div>'
+}
+
 export function buildLearningPlayback(item) {
   return { cells: item?.cells || [], speech: null }
 }
@@ -564,14 +568,18 @@ export function initApp() {
     const items = section?.items || []
     const index = items.indexOf(teaching.item)
     const practice = teaching.phase !== 'learn'
+    const referenceHidden = teaching.phase === 'exam' && teaching.examReferenceVisible !== true
+    const referenceAttrs = referenceHidden ? ' aria-hidden="true"' : ''
+    const referenceClass = referenceHidden ? ' is-exam-concealed' : ''
     return `<div class="subhead"><button class="button button-quiet" data-action="teaching-back-section">← ${esc(section?.label || '列表')}</button><span class="item-position">${index + 1} / ${items.length}</span></div>
-      <div class="lesson-layout">
-        <div class="lesson-summary"><p class="eyebrow">${esc(item.type)}</p><h2>${esc(item.label)}</h2><p class="lesson-note">${item.type === 'initial' ? '声母' : item.type === 'final' ? '韵母' : item.type === 'syllable' ? `音节${item.toneName ? ` · ${item.toneName}` : ''}` : ''}</p></div>
-        <div class="lesson-braille"><div class="lesson-unicode">${esc(item.unicode)}</div>${diagramHtml(item.cells)}<p>点位：${esc(pointsText(item.cells))}</p><p>键位：<strong>${esc(keyHintForCells(item.cells))}</strong></p>${item.type === 'syllable' ? `<div class="syllable-tone-picker">${buildTonePickerHtml(teaching.tone)}<p class="tone-status">${item.toneName || '无调'} · ${item.cells.length}方${teaching.tone && item.cells.length < 3 ? ' · 按国家通用盲文规则省写' : ''}</p></div>` : ''}</div>
-        <div class="lesson-actions"><button class="button button-primary" data-action="play-item">播放 AudioBraille</button><button class="button button-success" data-action="mark-learned">标记为已学</button></div>
+      <div class="lesson-layout${referenceClass}">
+        <div class="lesson-summary"${referenceAttrs}><p class="eyebrow">${esc(item.type)}</p><h2>${esc(item.label)}</h2><p class="lesson-note">${item.type === 'initial' ? '声母' : item.type === 'final' ? '韵母' : item.type === 'syllable' ? `音节${item.toneName ? ` · ${item.toneName}` : ''}` : ''}</p></div>
+        <div class="lesson-braille"${referenceAttrs}><div class="lesson-unicode">${esc(item.unicode)}</div>${diagramHtml(item.cells)}<p>点位：${esc(pointsText(item.cells))}</p><p>键位：<strong>${esc(keyHintForCells(item.cells))}</strong></p>${item.type === 'syllable' ? `<div class="syllable-tone-picker">${buildTonePickerHtml(teaching.tone)}<p class="tone-status">${item.toneName || '无调'} · ${item.cells.length}方${teaching.tone && item.cells.length < 3 ? ' · 按国家通用盲文规则省写' : ''}</p></div>` : ''}</div>
+        <div class="lesson-actions"${referenceAttrs}><button class="button button-primary" data-action="play-item">播放 AudioBraille</button><button class="button button-success" data-action="mark-learned">标记为已学</button></div>
+        ${referenceHidden ? buildExamReferenceMaskHtml() : ''}
       </div>
       <div class="phase-tabs"><button class="tab${teaching.phase === 'learn' ? ' is-active' : ''}" data-action="teaching-phase" data-phase="learn">学</button><button class="tab${teaching.phase === 'practice' ? ' is-active' : ''}" data-action="teaching-phase" data-phase="practice">练</button><button class="tab${teaching.phase === 'exam' ? ' is-active' : ''}" data-action="teaching-phase" data-phase="exam">考</button></div>
-      <div class="phase-panel">${practice ? `<p>${teaching.phase === 'practice' ? '请根据上方提示输入，按 0 提交。' : '不看答案，输入这个项目的盲文，按 0 提交。'}</p><div class="input-preview" id="learning-input-preview">${inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, state.input.cursorIndex, '学习输入')}</div>` : `<p>${esc(buildItemSpeech(item, getLang()))}</p>`}</div>
+      <div class="phase-panel">${practice ? `<p>${teaching.phase === 'practice' ? '请根据上方提示输入，按 0 提交。' : '上方教学内容已隐藏。请输入这个项目的盲文，按 0 提交；需要核对时可点击“查看”。'}</p><div class="input-preview" id="learning-input-preview">${inputDisplayHtml(state.input.confirmedCells, state.input.currentDots, state.input.cursorIndex, '学习输入')}</div>` : `<p>${esc(buildItemSpeech(item, getLang()))}</p>`}</div>
       <div class="item-nav"><button class="button button-quiet" data-action="teaching-prev" ${index <= 0 ? 'disabled' : ''}>← 上一个</button><button class="button button-quiet" data-action="teaching-next" ${index >= items.length - 1 ? 'disabled' : ''}>下一个 →</button></div>`
   }
 
@@ -930,22 +938,23 @@ export function initApp() {
     else if (action === 'speak-guide') speak('小键盘七、四、一对应盲文点一、二、三；八、五、二对应点四、五、六。零提交，星号下一方，斜杠上一方，三退格，减号清空，加号朗读，句号空格。')
     else if (action === 'learning-tab') state = { ...state, learningTab: target.dataset.tab }
     else if (action === 'experiment-tab') { experimentToken++; reader.stop(); readerPlayToken += 1; cancelSpeech(); state = { ...state, experimentTab: target.dataset.tab } }
-    else if (action === 'teaching-home') state = { ...state, teaching: { ...state.teaching, category: null, section: null, item: null, tone: null } }
-    else if (action === 'teaching-category') state = { ...state, teaching: { ...state.teaching, category: target.dataset.category, section: null, item: null, tone: null } }
+    else if (action === 'teaching-show-reference') state = { ...state, teaching: { ...state.teaching, examReferenceVisible: true } }
+    else if (action === 'teaching-home') state = { ...state, teaching: { ...state.teaching, category: null, section: null, item: null, tone: null, examReferenceVisible: false } }
+    else if (action === 'teaching-category') state = { ...state, teaching: { ...state.teaching, category: target.dataset.category, section: null, item: null, tone: null, examReferenceVisible: false } }
     else if (action === 'teaching-continue') {
       const section = target.dataset.section
       const p = sectionProgress(state.teaching.category, section)
-      state = { ...state, teaching: { ...state.teaching, section, item: p.current || getTeachingSections(state.teaching.category).find(value => value.id === section).items[0], phase: 'learn', tone: null } }
+      state = { ...state, teaching: { ...state.teaching, section, item: p.current || getTeachingSections(state.teaching.category).find(value => value.id === section).items[0], phase: 'learn', tone: null, examReferenceVisible: false } }
     } else if (action === 'teaching-tone') {
       const tone = target.dataset.tone || null
-      state = { ...state, teaching: { ...state.teaching, tone }, input: { confirmedCells: [], currentDots: [], cursorIndex: 0 } }
-    } else if (action === 'teaching-item') state = { ...state, teaching: { ...state.teaching, section: target.dataset.section, item: decodeURIComponent(target.dataset.item), phase: 'learn', tone: null }, input: { confirmedCells: [], currentDots: [] } }
-    else if (action === 'teaching-back-section') state = { ...state, teaching: { ...state.teaching, section: null, item: null }, input: { confirmedCells: [], currentDots: [] } }
-    else if (action === 'teaching-phase') state = { ...state, teaching: { ...state.teaching, phase: target.dataset.phase }, input: { confirmedCells: [], currentDots: [] } }
+      state = { ...state, teaching: { ...state.teaching, tone, examReferenceVisible: false }, input: { confirmedCells: [], currentDots: [], cursorIndex: 0 } }
+    } else if (action === 'teaching-item') state = { ...state, teaching: { ...state.teaching, section: target.dataset.section, item: decodeURIComponent(target.dataset.item), phase: 'learn', tone: null, examReferenceVisible: false }, input: { confirmedCells: [], currentDots: [] } }
+    else if (action === 'teaching-back-section') state = { ...state, teaching: { ...state.teaching, section: null, item: null, examReferenceVisible: false }, input: { confirmedCells: [], currentDots: [] } }
+    else if (action === 'teaching-phase') state = { ...state, teaching: { ...state.teaching, phase: target.dataset.phase, examReferenceVisible: target.dataset.phase === 'exam' ? false : state.teaching.examReferenceVisible }, input: { confirmedCells: [], currentDots: [] } }
     else if (action === 'teaching-prev' || action === 'teaching-next') {
       const section = getTeachingSections(state.teaching.category).find(value => value.id === state.teaching.section)
       const index = section.items.indexOf(state.teaching.item) + (action === 'teaching-prev' ? -1 : 1)
-      if (section.items[index]) state = { ...state, teaching: { ...state.teaching, item: section.items[index], tone: null }, input: { confirmedCells: [], currentDots: [] } }
+      if (section.items[index]) state = { ...state, teaching: { ...state.teaching, item: section.items[index], tone: null, examReferenceVisible: false }, input: { confirmedCells: [], currentDots: [] } }
     } else if (action === 'play-item') { const item = getTeachingItem(state.teaching.category, state.teaching.section, state.teaching.item, getLang(), state.teaching.tone); if (item) { cancelSpeech(); const playback = buildLearningPlayback(item); void playCells(playback.cells) } }
     else if (action === 'mark-learned') {
       const section = getTeachingSections(state.teaching.category).find(value => value.id === state.teaching.section)
@@ -953,7 +962,7 @@ export function initApp() {
       const next = markTeachingLearned(old, state.teaching.item, section.items)
       saveSectionProgress(state.teaching.category, state.teaching.section, next)
       void progress.markLearned(state.teaching.category, state.teaching.section, state.teaching.item)
-      state = { ...state, teaching: { ...state.teaching, item: next.current || state.teaching.item } }
+      state = { ...state, teaching: { ...state.teaching, item: next.current || state.teaching.item, examReferenceVisible: false } }
     } else if (action === 'experiment-mode') { experimentToken++; cancelSpeech(); experiment.selectMode(target.dataset.mode); state = { ...state, input: { confirmedCells: [], currentDots: [] } } }
     else if (action === 'experiment-start') {
       const formal = state.experiment.researchMode === 'formal'

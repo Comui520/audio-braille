@@ -219,7 +219,9 @@ export function createInputController({ onCommit = null, onSpeech = null, onBack
     if (modifiers.ctrlKey || modifiers.altKey || modifiers.metaKey) return false
     const point = keyToPoint(key)
     if (point !== null) {
-      if (!currentDots.includes(point)) currentDots.push(point)
+      const index = currentDots.indexOf(point)
+      if (index === -1) currentDots.push(point)
+      else currentDots.splice(index, 1)
       currentDots.sort((a, b) => a - b)
       notifyChange()
       return true
