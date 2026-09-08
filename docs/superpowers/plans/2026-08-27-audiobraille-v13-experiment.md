@@ -202,7 +202,7 @@ git -c user.name="pi" -c user.email="pi@local" commit -m "feat: 建立分层随�
 - 修改：`src/experiment.js`、`src/app.js`、`src/app-state.js`、`src/styles.css`。
 - 测试：`tests/experiment-v9.test.js`、`tests/app-shell.test.js`。
 
-- [ ] **步骤 1：写失败测试**
+- [x] **步骤 1：写失败测试**
 
 在实验模型测试中增加：
 
@@ -238,7 +238,7 @@ it('正式实验入口要求同意并收集最少背景字段', () => {
 })
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：
 
@@ -248,7 +248,7 @@ npx vitest run tests/experiment-v9.test.js tests/app-shell.test.js
 
 预期：实验结果没有逐题研究字段，应用没有正式研究入口构造函数。
 
-- [ ] **步骤 3：实现最少代码**
+- [x] **步骤 3：实现最少代码**
 
 实验模型增加：
 
@@ -294,7 +294,7 @@ export function buildResearchEntryHtml() {
 
 formal 入口创建随机 `participantId`、`sessionId`，同意前不创建上传任务。研究状态从 consent 依次进入 profile、training、recognition；casual 入口不显示背景表单。
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：
 
@@ -302,7 +302,7 @@ formal 入口创建随机 `participantId`、`sessionId`，同意前不创建上�
 npx vitest run tests/experiment-v9.test.js tests/app-shell.test.js tests/teaching-speech.test.js
 ```
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```powershell
 git add src/experiment.js src/app.js src/app-state.js src/styles.css tests/experiment-v9.test.js tests/app-shell.test.js
@@ -318,7 +318,7 @@ git -c user.name="pi" -c user.email="pi@local" commit -m "feat: 增加正式实�
 - 修改：`src/reader.js`、`src/app.js`、`src/app-state.js`、`src/styles.css`。
 - 测试：`tests/reader-passages.test.js`、`tests/experiment-v9.test.js`、`tests/app-shell.test.js`。
 
-- [ ] **步骤 1：写失败测试**
+- [x] **步骤 1：写失败测试**
 
 ```js
 import { describe, it, expect } from 'vitest'
@@ -346,7 +346,7 @@ describe('听书材料库', () => {
 })
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：
 
@@ -356,7 +356,7 @@ npx vitest run tests/reader-passages.test.js tests/experiment-v9.test.js tests/a
 
 预期：材料库不存在，当前只有一段 `SAMPLE_TEXT`，播放结束后没有理解反馈。
 
-- [ ] **步骤 3：实现最少代码**
+- [x] **步骤 3：实现最少代码**
 
 创建至少 30 段自有短文材料，每段包含：
 
@@ -396,7 +396,7 @@ summarySubmitted
 
 formal 听书流程从材料库按种子抽取 3 段，至少覆盖两个长度层级。播放未完成时不显示理解按钮；完成后显示“听懂了/没听懂”。点击“听懂了”后显示普通文字 textarea，允许提交空概括但记录 `summarySubmitted: false`。casual 听书仍可直接播放，但不进入 formal 上传。
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：
 
@@ -404,7 +404,7 @@ formal 听书流程从材料库按种子抽取 3 段，至少覆盖两个长度�
 npx vitest run tests/reader-passages.test.js tests/experiment-v9.test.js tests/app-shell.test.js
 ```
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```powershell
 git add src/data/reader-passages.js src/reader.js src/app.js src/app-state.js src/styles.css tests/reader-passages.test.js tests/experiment-v9.test.js tests/app-shell.test.js
@@ -420,7 +420,7 @@ git -c user.name="pi" -c user.email="pi@local" commit -m "feat: 增加多材料�
 - 创建：`src/experiment-data.js`。
 - 测试：`tests/experiment-storage.test.js`。
 
-- [ ] **步骤 1：写失败测试**
+- [x] **步骤 1：写失败测试**
 
 ```js
 import { describe, it, expect, beforeEach } from 'vitest'
@@ -458,7 +458,7 @@ describe('实验本地数据队列', () => {
 })
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：
 
@@ -468,7 +468,7 @@ npx vitest run tests/experiment-storage.test.js
 
 预期：实验存储接口和批量构造函数不存在。
 
-- [ ] **步骤 3：实现最少代码**
+- [x] **步骤 3：实现最少代码**
 
 在 IndexedDB 版本 1 的数据库中增加对象仓库：
 
@@ -494,7 +494,7 @@ exportExperimentData(storage, format = 'json' | 'csv')
 
 `buildUploadBatch()` 只选择 `dataClass === 'formal'`、`consentAccepted === true` 且未标记上传成功的记录；返回一个批次 ID 和 sessions/trials/readerTrials 数组。CSV 导出包含字段标题和转义换行，不上传原文材料。
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：
 
@@ -502,7 +502,7 @@ exportExperimentData(storage, format = 'json' | 'csv')
 npx vitest run tests/experiment-storage.test.js tests/storage.test.js
 ```
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```powershell
 git add src/storage.js src/experiment-data.js tests/experiment-storage.test.js
@@ -519,7 +519,7 @@ git -c user.name="pi" -c user.email="pi@local" commit -m "feat: 增加实验本�
 - 创建：`tests/experiment-api.test.js`。
 - 修改：`vercel.json`，如需增加函数配置。
 
-- [ ] **步骤 1：写失败测试**
+- [x] **步骤 1：写失败测试**
 
 将 API 处理函数设计为可注入 `fetch` 的 `handleExperimentRequest(request, deps)`，新增：
 
@@ -542,7 +542,7 @@ it('缺少服务端配置时返回可重试错误', async () => {
 })
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：
 
@@ -552,7 +552,7 @@ npx vitest run tests/experiment-api.test.js
 
 预期：`api/experiment.js` 不存在。
 
-- [ ] **步骤 3：实现最少代码**
+- [x] **步骤 3：实现最少代码**
 
 `api/experiment.js`：
 
@@ -626,7 +626,7 @@ create table if not exists upload_receipts (
 
 表字段按 v13 规格保存原始 JSONB 和常用索引字段；不保存 IP、邮箱、姓名、原文材料或服务端密钥。SQL 中为 `session_id`、`stimulus_id`、`passage_id`、`study_version`、`data_class` 建索引。
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：
 
@@ -634,7 +634,7 @@ create table if not exists upload_receipts (
 npx vitest run tests/experiment-api.test.js
 ```
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```powershell
 git add api/experiment.js supabase/experiment-schema.sql tests/experiment-api.test.js vercel.json
@@ -650,7 +650,7 @@ git -c user.name="pi" -c user.email="pi@local" commit -m "feat: 增加实验数�
 - 修改：`index.html`，补充同意与隐私入口文本。
 - 测试：`tests/app-shell.test.js`、`tests/app-state.test.js`、`tests/experiment-storage.test.js`。
 
-- [ ] **步骤 1：写失败测试**
+- [x] **步骤 1：写失败测试**
 
 新增状态转换测试：
 
@@ -672,7 +672,7 @@ it('正式实验提供上传状态和本地导出入口', () => {
 })
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：
 
@@ -682,7 +682,7 @@ npx vitest run tests/app-shell.test.js tests/app-state.test.js tests/experiment-
 
 预期：正式流程状态函数和上传状态视图不存在。
 
-- [ ] **步骤 3：实现最少代码**
+- [x] **步骤 3：实现最少代码**
 
 应用流程：
 
@@ -699,7 +699,7 @@ npx vitest run tests/app-shell.test.js tests/app-state.test.js tests/experiment-
 
 上传请求只发送 formal 且 consentAccepted 的批次。上传完成后保存 receipt，重复点击不会重复产生服务端记录。页面显示上传成功、等待上传和上传失败三种状态。
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：
 
@@ -707,7 +707,7 @@ npx vitest run tests/app-shell.test.js tests/app-state.test.js tests/experiment-
 npx vitest run tests/app-shell.test.js tests/app-state.test.js tests/experiment-storage.test.js
 ```
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```powershell
 git add src/app.js src/app-state.js src/storage.js src/experiment-data.js src/styles.css index.html tests/app-shell.test.js tests/app-state.test.js tests/experiment-storage.test.js
@@ -724,7 +724,7 @@ git -c user.name="pi" -c user.email="pi@local" commit -m "feat: 接入正式实�
 - 修改：`README.md`，如果仓库已有 README。
 - 修改：`AGENTS.md`。
 
-- [ ] **步骤 1：补研究数据字典和后期分析说明**
+- [x] **步骤 1：补研究数据字典和后期分析说明**
 
 数据字典逐字段说明：
 
@@ -747,7 +747,7 @@ qualityFlags / analysisEligibility
 - 听书“听懂了”与概括人工评分分开；
 - 题库和材料按版本分开分析。
 
-- [ ] **步骤 2：运行完整测试和构建**
+- [x] **步骤 2：运行完整测试和构建**
 
 运行：
 
@@ -758,7 +758,7 @@ npm run build
 
 预期：所有测试通过，Vite 构建成功。
 
-- [ ] **步骤 3：浏览器验证 casual/formal 隔离**
+- [x] **步骤 3：浏览器验证 casual/formal 隔离**
 
 启动预览：
 
@@ -782,7 +782,7 @@ node node_modules/vite/bin/vite.js preview --port 4178 --strictPort --host 127.0
 12. API 未配置时数据仍留在本地并显示可重试状态；
 13. 页面不展示或上传原文材料、姓名、邮箱和 IP。
 
-- [ ] **步骤 4：更新项目进度并 Commit**
+- [x] **步骤 4：更新项目进度并 Commit**
 
 ```powershell
 git add docs/superpowers/specs/2026-08-27-audiobraille-v13-experiment-data-dictionary.md docs/experiment-analysis.md README.md AGENTS.md
