@@ -46,6 +46,15 @@ import { createSerialQueue } from './async-queue.js'
 
 export { createAppState }
 export function buildPages() { return [...TOP_LEVEL_PAGES] }
+export function readerScopeForState(state = {}) {
+  if (state.page === 'reader') return 'experience'
+  if (state.page === 'experiment' && state.experiment?.researchMode === 'formal' && state.experiment?.formalPhase === 'reader') return 'formal'
+  return 'none'
+}
+
+export function shouldHandleGateKey(event = {}) {
+  return event.key === '0' && !event.ctrlKey && !event.altKey && !event.metaKey
+}
 
 export function buildTopNav(lang = 'zh') {
   return [
@@ -357,26 +366,55 @@ export function initApp() {
   let readerReplayCount = 0
   let readerPlayToken = 0
   let activeReaderGeneration = null
-  const reader = createReader({ onTick: (position, total) => {
-    const el = document.querySelector('#reader-progress')
-    if (el) el.textContent = `${position} / ${total}`
-  }, onComplete: ({ generation } = {}) => {
-    if (generation !== activeReaderGeneration) return
-    readerCompleted = true
-    readerTrialRecord = createReaderTrialRecord({
-      passageId: selectedReaderPassage.passageId,
-      passageVersion: selectedReaderPassage.passageVersion,
-      passageIndex: readerPassages.findIndex(passage => passage.passageId === selectedReaderPassage.passageId),
-      playStartedAt: readerPlayStartedAt,
-      playCompletedAt: Date.now(),
-      playedDurationMs: readerPlayStartedAt ? Date.now() - readerPlayStartedAt : null,
-      completed: true,
-      pauseCount: reader.snapshot().pauseCount,
-      replayCount: readerReplayCount,
-      playbackSpeed: reader.getSpeed()
-    })
-    render()
-  }, onCellStart: (index) => { if (state.page === 'reader') setPlaybackHighlight('#experience-braille', index) }, onCellComplete: () => { if (state.page === 'reader') clearPlaybackHighlight('#experience-braille') } })
+  let experienceReaderCompleted = false
+  let experienceReaderUnderstood = null
+  let experienceReaderSummary = ''
+  let experienceReaderPlayStartedAt = null
+  let experienceReaderReplayCount = 0
+  let experienceReaderPlayToken = 0
+  let experienceActiveReaderGeneration = null
+  const reader = createReader({
+    onTick: (position, total) => {
+      const el = document.querySelector('#reader-progress')
+      if (el) el.textContent = `${position} / ${total}`
+    },
+    onComplete: ({ generation } = {}) => {
+      const scope = readerScopeForState(state)
+      if (scope === 'experience') {
+        if (generation !== experienceActiveReaderGeneration) return
+        experienceReaderCompleted = true
+        clearPlaybackHighlight('#experience-braille')
+        render()
+        return
+      }
+      if (scope !== 'formal' || generation !== activeReaderGeneration) return
+      readerCompleted = true
+      readerTrialRecord = createReaderTrialRecord({
+        passageId: selectedReaderPassage.passageId,
+        passageVersion: selectedReaderPassage.passageVersion,
+        passageIndex: readerPassages.findIndex(passage => passage.passageId === selectedReaderPassage.passageId),
+        playStartedAt: readerPlayStartedAt,
+        playCompletedAt: Date.now(),
+        playedDurationMs: readerPlayStartedAt ? Date.now() - readerPlayStartedAt : null,
+        completed: true,
+        pauseCount: reader.snapshot().pauseCount,
+        replayCount: readerReplayCount,
+        playbackSpeed: reader.getSpeed()
+      })
+      clearPlaybackHighlight('#reader-braille')
+      render()
+    },
+    onCellStart: (index) => {
+      const scope = readerScopeForState(state)
+      if (scope === 'experience') setPlaybackHighlight('#experience-braille', index)
+      if (scope === 'formal') setPlaybackHighlight('#reader-braille', index)
+    },
+    onCellComplete: () => {
+      const scope = readerScopeForState(state)
+      if (scope === 'experience') clearPlaybackHighlight('#experience-braille')
+      if (scope === 'formal') clearPlaybackHighlight('#reader-braille')
+    }
+  })
   let experiment = createExperimentModel({ trialCount: 10 })
   let noteText = ''
   let inputOutput = ''
@@ -521,6 +559,15 @@ export function initApp() {
     readerSummaryConfirmed = false
     formalSession = null
     formalPersistenceFailed = false
+    reader.stop()
+    readerPlayToken += 1
+    activeReaderGeneration = null
+    readerCompleted = false
+    readerUnderstood = null
+    readerSummary = ''
+    readerTrialRecord = null
+    readerPlayStartedAt = null
+    readerReplayCount = 0
     readerPassages = sampleReaderPassages(READER_PASSAGES, 3, sessionId)
     reader.setSpeed(1)
     selectedReaderPassage = readerPassages[0]
@@ -728,8 +775,10 @@ export function initApp() {
     const input = state.input
     const composition = input.compositionCells || input.confirmedCells
     const compositionCursor = input.compositionCursor ?? input.cursorIndex
-    const formalReader = state.experiment.researchMode === 'formal'
-    return `<div class="reader-panel"><h2>听书场景</h2><p>播放当前材料，完成后再填写理解反馈。</p>${formalReader ? `<p class="reader-passage-meta">第 ${formalReaderIndex + 1} / ${readerPassages.length} 段材料 · ${esc(selectedReaderPassage.topicStratum)} · ${esc(selectedReaderPassage.difficultyStratum)}</p>` : ''}<div class="reader-input-preview">${inputDisplayHtml(composition, input.currentDots, compositionCursor, '当前多方输入')}</div>${formalReader ? '' : buildTextareaDocumentHtml(currentReaderText, { id: 'reader-text', rows: 4, label: '盲文内容' })}${buildReaderSpeedHtml({ formal: formalReader, speed: formalReader ? 1 : reader.getSpeed() })}<div class="button-row"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-pause">暂停</button><button class="button button-quiet" data-action="reader-resume">继续</button><button class="button button-quiet" data-action="reader-stop">停止</button></div><div id="reader-progress" aria-live="polite"></div>${buildReaderComprehensionHtml({ completed: readerCompleted, understood: readerUnderstood, summaryText: readerSummary })}${experimentEntryError ? `<p class="form-error" role="alert">${esc(experimentEntryError)}</p>` : ""}</div>`
+    const readerScope = readerScopeForState(state)
+    const formalReader = readerScope === 'formal'
+    const readerCompletion = formalReader ? readerCompleted : experienceReaderCompleted
+    return `<div class="reader-panel"><h2>听书场景</h2><p>播放当前材料，完成后再填写理解反馈。</p>${formalReader ? `<p class="reader-passage-meta">第 ${formalReaderIndex + 1} / ${readerPassages.length} 段材料 · ${esc(selectedReaderPassage.topicStratum)} · ${esc(selectedReaderPassage.difficultyStratum)}</p>` : ''}<div class="reader-input-preview">${inputDisplayHtml(composition, input.currentDots, compositionCursor, '当前多方输入')}</div>${formalReader ? '' : buildTextareaDocumentHtml(currentReaderText, { id: 'reader-text', rows: 4, label: '盲文内容' })}${buildReaderSpeedHtml({ formal: formalReader, speed: formalReader ? 1 : reader.getSpeed() })}<div class="button-row"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-pause">暂停</button><button class="button button-quiet" data-action="reader-resume">继续</button><button class="button button-quiet" data-action="reader-stop">停止</button></div><div id="reader-progress" aria-live="polite"></div>${buildReaderComprehensionHtml({ completed: readerCompletion, understood: formalReader ? readerUnderstood : experienceReaderUnderstood, summaryText: formalReader ? readerSummary : experienceReaderSummary })}${experimentEntryError ? `<p class="form-error" role="alert">${esc(experimentEntryError)}</p>` : ""}</div>`
   }
 
   function renderExperienceReader() {
@@ -742,7 +791,7 @@ export function initApp() {
       selectedBookId: selectedExperienceBookId,
       selectedChapterId: chapter?.chapterId || selectedExperienceChapterId,
       speed: reader.getSpeed(),
-      completed: readerCompleted,
+      completed: experienceReaderCompleted,
       progressText: document.querySelector('#reader-progress')?.textContent || ''
     })
   }
@@ -818,19 +867,19 @@ export function initApp() {
       selectedExperienceBookId = experienceBook.value
       selectedExperienceChapterId = getExperienceChapters(selectedExperienceBookId)[0]?.chapterId || ''
       reader.stop()
-      readerPlayToken += 1
-      readerCompleted = false
-      activeReaderGeneration = null
-      render()
+       experienceReaderPlayToken += 1
+       experienceReaderCompleted = false
+       experienceActiveReaderGeneration = null
+       render()
     })
     const experienceChapter = document.querySelector('#experience-chapter')
     experienceChapter?.addEventListener('change', () => {
       selectedExperienceChapterId = experienceChapter.value
       reader.stop()
-      readerPlayToken += 1
-      readerCompleted = false
-      activeReaderGeneration = null
-      render()
+       experienceReaderPlayToken += 1
+       experienceReaderCompleted = false
+       experienceActiveReaderGeneration = null
+       render()
     })
     const readerPassage = document.querySelector('#reader-passage')
     readerPassage?.addEventListener('change', () => {
@@ -1223,51 +1272,90 @@ export function initApp() {
       }
     }
     else if (action === 'reader-play') {
-      if (state.experiment.researchMode === 'formal' && state.experiment.formalPhase !== 'reader') return
-      readerCompleted = false
-      readerUnderstood = null
-      readerSummary = ''
-      readerTrialRecord = null
-      readerReplayCount = readerPlayStartedAt ? readerReplayCount + 1 : 0
-      readerPlayStartedAt = Date.now()
-      activeReaderGeneration = null
+      const scope = readerScopeForState(state)
+      if (state.experiment.researchMode === 'formal' && scope !== 'formal') return
+      const formalReader = scope === 'formal'
+      if (formalReader) {
+        readerCompleted = false
+        readerUnderstood = null
+        readerSummary = ''
+        readerTrialRecord = null
+        readerReplayCount = readerPlayStartedAt ? readerReplayCount + 1 : 0
+        readerPlayStartedAt = Date.now()
+        activeReaderGeneration = null
+        readerPlayToken += 1
+      } else {
+        experienceReaderCompleted = false
+        experienceReaderUnderstood = null
+        experienceReaderSummary = ''
+        experienceReaderReplayCount = experienceReaderPlayStartedAt ? experienceReaderReplayCount + 1 : 0
+        experienceReaderPlayStartedAt = Date.now()
+        experienceActiveReaderGeneration = null
+        experienceReaderPlayToken += 1
+      }
       reader.stop()
-      readerPlayToken += 1
-      const playToken = readerPlayToken
-      if (state.experiment.researchMode === 'formal') reader.setSpeed(1)
+      const playToken = formalReader ? readerPlayToken : experienceReaderPlayToken
+      if (formalReader) reader.setSpeed(1)
       const experienceChapter = EXPERIENCE_CHAPTERS.find(chapter => chapter.chapterId === selectedExperienceChapterId)
-      const playText = state.page === 'reader' ? (experienceChapter?.brailleCells || []) : state.experiment.researchMode === 'formal' ? selectedReaderPassage.brailleCells : (document.querySelector('#reader-text')?.value || SAMPLE_BRAILLE)
+      const playText = state.page === 'reader' ? (experienceChapter?.brailleCells || []) : formalReader ? selectedReaderPassage.brailleCells : (document.querySelector('#reader-text')?.value || SAMPLE_BRAILLE)
       currentReaderText = Array.isArray(playText) ? playText.map(dots => dotsToUnicode(dots)).join('') : playText
-      activeReaderGeneration = reader.snapshot().generation + 1
+      if (formalReader) activeReaderGeneration = reader.snapshot().generation + 1
+      else experienceActiveReaderGeneration = reader.snapshot().generation + 1
       const playPromise = reader.play(playText)
-      activeReaderGeneration = reader.snapshot().generation
-      void playPromise.then(() => { if (playToken !== readerPlayToken) readerCompleted = false })
+      if (formalReader) activeReaderGeneration = reader.snapshot().generation
+      else experienceActiveReaderGeneration = reader.snapshot().generation
+      void playPromise.then(() => {
+        if (formalReader && playToken !== readerPlayToken) readerCompleted = false
+        if (!formalReader && playToken !== experienceReaderPlayToken) experienceReaderCompleted = false
+      })
     }
-    else if (action === 'reader-stop') { activeReaderGeneration = null; reader.stop(); readerPlayToken += 1; readerCompleted = false; readerTrialRecord = null; clearPlaybackHighlight() }
+    else if (action === 'reader-stop') {
+      const scope = readerScopeForState(state)
+      reader.stop()
+      clearPlaybackHighlight()
+      if (scope === 'formal') { activeReaderGeneration = null; readerPlayToken += 1; readerCompleted = false; readerTrialRecord = null }
+      else if (scope === 'experience') { experienceActiveReaderGeneration = null; experienceReaderPlayToken += 1; experienceReaderCompleted = false }
+    }
     else if (action === 'reader-pause') reader.pause()
     else if (action === 'reader-resume') reader.resume()
     else if (action === 'reader-understood') {
-      readerUnderstood = true
-      if (readerTrialRecord) readerTrialRecord = { ...readerTrialRecord, selfReportedUnderstood: true }
+      const scope = readerScopeForState(state)
+      if (scope === 'formal') {
+        readerUnderstood = true
+        if (readerTrialRecord) readerTrialRecord = { ...readerTrialRecord, selfReportedUnderstood: true }
+      } else if (scope === 'experience') {
+        experienceReaderUnderstood = true
+      }
       render()
     }
     else if (action === 'reader-not-understood') {
-      readerUnderstood = false
-      if (readerTrialRecord) readerTrialRecord = { ...readerTrialRecord, selfReportedUnderstood: false }
-      if (state.experiment.researchMode === 'formal') void finalizeFormalReaderTrial(false)
-      else render()
+      const scope = readerScopeForState(state)
+      if (scope === 'formal') {
+        readerUnderstood = false
+        if (readerTrialRecord) readerTrialRecord = { ...readerTrialRecord, selfReportedUnderstood: false }
+        void finalizeFormalReaderTrial(false)
+      } else if (scope === 'experience') {
+        experienceReaderUnderstood = false
+        render()
+      }
     }
     else if (action === 'reader-summary-skip') {
-      if (state.experiment.researchMode === 'formal') void finalizeFormalReaderTrial(true, '')
-      else render()
+      const scope = readerScopeForState(state)
+      if (scope === 'formal') void finalizeFormalReaderTrial(true, '')
+      else if (scope === 'experience') render()
     }
     else if (action === 'reader-summary-submit') {
-      readerSummary = document.querySelector('#reader-summary')?.value || ''
-      if (readerTrialRecord) readerTrialRecord = { ...readerTrialRecord, summaryText: readerSummary, summarySubmitted: readerSummary.trim().length > 0 }
-      if (state.experiment.researchMode === 'formal') void finalizeFormalReaderTrial(true, readerSummary)
-      else render()
-    }
-    else if (action === 'experiment-upload') { void uploadFormalData() }
+      const scope = readerScopeForState(state)
+      const summary = document.querySelector('#reader-summary')?.value || ''
+      if (scope === 'formal') {
+        readerSummary = summary
+        if (readerTrialRecord) readerTrialRecord = { ...readerTrialRecord, summaryText: readerSummary, summarySubmitted: readerSummary.trim().length > 0 }
+        void finalizeFormalReaderTrial(true, readerSummary)
+      } else if (scope === 'experience') {
+        experienceReaderSummary = summary
+        render()
+      }
+    }    else if (action === 'experiment-upload') { void uploadFormalData() }
     else if (action === 'experiment-export-json') { void exportFormalData('json') }
     else if (action === 'experiment-export-csv') { void exportFormalData('csv') }
     else if (action === 'notes-save') void notes.save()
@@ -1276,7 +1364,7 @@ export function initApp() {
     else if (action === 'notes-export') void notes.exportNote('json')
     else if (action === 'notes-import') document.querySelector('#note-import-file')?.click()
     else if (action === 'notes-new') { notes.newNote(); loadEditorText('notes', '') }
-    else if (TOP_LEVEL_PAGES.includes(action)) { experimentToken++; reader.stop(); readerPlayToken += 1; cancelSpeech(); clearPlaybackHighlight(); state = { ...state, page: action, input: { confirmedCells: [], currentDots: [] } } }
+    else if (TOP_LEVEL_PAGES.includes(action)) { experimentToken++; reader.stop(); readerPlayToken += 1; experienceReaderPlayToken += 1; activeReaderGeneration = null; experienceActiveReaderGeneration = null; cancelSpeech(); clearPlaybackHighlight(); state = { ...state, page: action, input: { confirmedCells: [], currentDots: [] } } }
     render()
   }
 
@@ -1365,7 +1453,10 @@ export function initApp() {
   }
 
   function onGateKey(event) {
-    if (event.key !== '0') { event.preventDefault(); event.stopPropagation(); return }
+    if (!shouldHandleGateKey(event)) {
+      if (event.ctrlKey || event.altKey || event.metaKey) return
+      event.preventDefault(); event.stopPropagation(); return
+    }
     event.preventDefault(); event.stopPropagation(); openApp()
   }
   function onGateClick(event) {

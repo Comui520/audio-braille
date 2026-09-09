@@ -27,6 +27,11 @@ describe('听书材料库', () => {
     )
   })
 
+  it('体验章节的邻里互助材料使用阳平 lian2，而不是错误的去声 lian4', () => {
+    const passage = READER_PASSAGES.find(item => item.passageId === 'reader-006')
+    expect(passage?.pinyin).toContain('lian2')
+    expect(passage?.pinyin).not.toContain('lian4')
+  })
   it('体验听书提供多本书和较长章节，章节明文与盲文方序列一一对应', () => {
     expect(EXPERIENCE_BOOKS.length).toBeGreaterThanOrEqual(3)
     expect(EXPERIENCE_CHAPTERS.length).toBeGreaterThanOrEqual(6)
@@ -42,4 +47,3 @@ describe('听书材料库', () => {
       .toMatchObject({ completed: false, summarySubmitted: false })
   })
 })
-

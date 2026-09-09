@@ -13,10 +13,24 @@ import {
   buildFormalUploadStatusHtml,
   buildExamReferenceMaskHtml,
   buildFormalTrainingHtml,
-  buildExperienceReaderHtml
+  buildExperienceReaderHtml,
+  readerScopeForState,
+  shouldHandleGateKey
 } from '../src/app.js'
 
 describe('v12 应用壳', () => {
+  it('体验听书和正式听书使用独立运行时作用域', () => {
+    expect(readerScopeForState({ page: 'reader', experiment: { researchMode: 'casual', formalPhase: null } })).toBe('experience')
+    expect(readerScopeForState({ page: 'experiment', experiment: { researchMode: 'formal', formalPhase: 'reader' } })).toBe('formal')
+    expect(readerScopeForState({ page: 'experiment', experiment: { researchMode: 'formal', formalPhase: 'training' } })).toBe('none')
+  })
+
+  it('启动门不拦截刷新和辅助技术组合键，只处理裸 0', () => {
+    expect(shouldHandleGateKey({ key: '0' })).toBe(true)
+    expect(shouldHandleGateKey({ key: 'r', ctrlKey: true })).toBe(false)
+    expect(shouldHandleGateKey({ key: '0', ctrlKey: true })).toBe(false)
+    expect(shouldHandleGateKey({ key: 'a', altKey: true })).toBe(false)
+  })
   it('顶层导航包含独立体验听书入口', () => {
     expect(buildTopNav().map(item => item.id)).toEqual(['home', 'learning', 'experiment', 'reader', 'notes'])
   })
