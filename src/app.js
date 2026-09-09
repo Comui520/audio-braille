@@ -15,7 +15,7 @@ import {
 import { createInputController, keyToPoint } from './input.js'
 import { createProgressStore } from './curriculum.js'
 import { getTeachingCategories, getTeachingSections, getTeachingItems, getTeachingItem, markTeachingLearned, buildItemSpeech } from './teaching.js'
-import { createExperimentModel, buildShowcase, buildShowcaseInstruction } from './experiment.js'
+import { createExperimentModel, buildShowcase, buildShowcaseInstruction, buildTrainingRuleText, TRAINING_SINGLE_POINTS, TRAINING_MULTI_EXAMPLES, TRAINING_PRACTICE_TRIALS, TRAINING_CALIBRATION_TRIALS, CALIBRATION_PASS_SCORE } from './experiment.js'
 import { createReader, SAMPLE_BRAILLE, buildReaderComprehensionHtml, createReaderTrialRecord } from './reader.js'
 import { READER_PASSAGES, sampleReaderPassages } from './data/reader-passages.js'
 import { initNotes } from './notes.js'
@@ -130,6 +130,20 @@ export function buildFormalRecognitionRecord({ sessionId, record = {}, analysisE
   }
 }
 
+export function buildFormalTrainingRecord({ sessionId, record = {}, analysisEligibility = 'incomplete' } = {}) {
+  return {
+    ...record,
+    eventId: record.eventId || record.trialId,
+    sessionId,
+    dataClass: 'training',
+    phase: 'training',
+    studyVersion: record.studyVersion || STUDY_VERSION,
+    protocolVersion: record.protocolVersion || PROTOCOL_VERSION,
+    clientVersion: record.clientVersion || CLIENT_VERSION,
+    analysisEligibility
+  }
+}
+
 export function buildFormalReaderRecord({ sessionId, record = {}, analysisEligibility = 'incomplete' } = {}) {
   return {
     ...record,
@@ -215,6 +229,44 @@ export function buildExamReferenceMaskHtml() {
 
 export function buildLearningPlayback(item) {
   return { cells: item?.cells || [], speech: null }
+}
+
+export function buildFormalTrainingHtml(model = {}) {
+  const step = model.trainingStep || 'rules'
+  const labels = {
+    rules: '完整规则',
+    'single-points': '六个单点',
+    'multi-examples': '多点示例',
+    practice: '不计分练习',
+    calibration: '固定校准'
+  }
+  const steps = ['rules', 'single-points', 'multi-examples', 'practice', 'calibration']
+  const progress = `<ol class="training-steps" aria-label="训练进度">${steps.map(item => `<li class="${item === step ? 'is-current' : steps.indexOf(item) < steps.indexOf(step) ? 'is-done' : ''}">${labels[item]}</li>`).join('')}</ol>`
+  const inputConfirmedCells = model.inputConfirmedCells || []
+  const inputCurrentDots = model.inputCurrentDots || []
+  const inputCursorIndex = model.inputCursorIndex ?? 0
+  const trainingInput = step === 'rules' || step === 'complete' ? '' : `<div class="training-input-panel"><h3>训练输入</h3>${inputDisplayHtml(inputConfirmedCells, inputCurrentDots, inputCursorIndex, '训练输入盲文点位')}<p class="training-input-note">${step === 'single-points' || step === 'multi-examples' ? '可以跟着声音试着输入；本阶段仅用于熟悉操作，不计分。' : model.trainingQuestionStarted ? '已播放本题，可以输入听到的盲文方，按 0 提交。' : '请先播放本题，播放完成后才能输入并提交。'}</p></div>`
+  let body = ''
+  if (step === 'complete') {
+    body = model.calibrationPassed ? `<p>校准通过，正在进入正式辨识。</p>` : `<p>本次校准得分 ${model.trainingCalibrationScore || 0} / ${(model.trainingCalibrationTrials || []).length}，未达到通过标准。请重新完成统一训练和校准。</p><button class="button button-primary" data-action="training-restart">重新训练和校准</button>`
+  } else if (step === 'rules') {
+    body = `<p>先听完整规则说明。播放结束后自动进入下一步。</p><button class="button button-primary" data-action="training-play-rules">播放完整规则</button>`
+  } else if (step === 'single-points') {
+    body = `<p>按顺序播放点 1 至点 6 的单点声音，帮助你建立左右声道和音高对应关系。</p><button class="button button-primary" data-action="training-play-single">播放六个单点</button><p id="training-showcase-current" class="training-current" aria-live="polite">准备播放</p>`
+  } else if (step === 'multi-examples') {
+    body = `<p>播放固定的多点方示例，熟悉同一方中同时响起的和弦。</p><button class="button button-primary" data-action="training-play-multi">播放多点示例</button><p id="training-showcase-current" class="training-current" aria-live="polite">准备播放</p>`
+  } else if (step === 'practice') {
+    const trials = model.trainingPracticeTrials || []
+    const trial = trials[model.trainingQuestionIndex || 0]
+    const played = model.trainingQuestionStarted === true
+    body = `<p>这是不计入正式结果的练习。先播放本题，再输入听到的盲文方，按 0 提交。</p><p><strong>练习题 ${Math.min((model.trainingQuestionIndex || 0) + 1, trials.length)} / ${trials.length}</strong></p><button class="button button-primary" data-action="training-listen-question" ${played || !trial ? 'disabled' : ''}>${played ? '已播放，请输入' : '播放本题'}</button><div class="input-preview" id="training-input-preview">${played ? '请用小键盘输入盲文，按 0 提交。' : '请先播放本题。'}</div>`
+  } else if (step === 'calibration') {
+    const trials = model.trainingCalibrationTrials || []
+    const trial = trials[model.trainingQuestionIndex || 0]
+    const played = model.trainingQuestionStarted === true
+    body = `<p>固定校准题用于确认你是否已经掌握 AudioBraille 编码。答对至少 ${CALIBRATION_PASS_SCORE} / ${trials.length} 题才可进入正式辨识。</p><p><strong>校准题 ${Math.min((model.trainingQuestionIndex || 0) + 1, trials.length)} / ${trials.length}</strong></p><button class="button button-primary" data-action="training-listen-question" ${played || !trial ? 'disabled' : ''}>${played ? '已播放，请输入' : '播放本题'}</button><div class="input-preview" id="training-input-preview">${played ? '请用小键盘输入盲文，按 0 提交。' : '请先播放本题。'}</div>`
+  }
+  return `<section class="experiment-status training-panel"><h2>统一训练和校准</h2><p>训练数据只用于训练质量记录，不计入正式辨识结果。</p>${progress}${model.feedback ? `<p class="training-feedback" role="status">${esc(model.feedback)}</p>` : ''}<div class="training-step-content">${body}${trainingInput}</div></section>`
 }
 
 export function appendCommittedBraille(existing, cells) {
@@ -332,6 +384,8 @@ export function initApp() {
   let readerSummaryConfirmed = false
   let readerFinalizing = false
   let formalPersistenceFailed = false
+  let trainingPlaybackBusy = false
+  let trainingFeedback = ''
   const formalPersistenceQueue = createSerialQueue()
 
 
@@ -350,6 +404,23 @@ export function initApp() {
     } catch (error) {
       formalPersistenceFailed = true
       experimentEntryError = error.message || '正式实验记录保存失败。'
+      return false
+    }
+  }
+
+  async function persistTrainingRecord(record) {
+    if (state.experiment.researchMode !== 'formal' || !record || !formalSession) return false
+    const event = buildFormalTrainingRecord({
+      sessionId: formalSession.sessionId,
+      record,
+      analysisEligibility: formalSession.analysisEligibility
+    })
+    try {
+      await formalPersistenceQueue.enqueue(() => saveTrial(storage, event))
+      return true
+    } catch (error) {
+      formalPersistenceFailed = true
+      experimentEntryError = error.message || '训练记录保存失败。'
       return false
     }
   }
@@ -618,7 +689,7 @@ export function initApp() {
       if (formal && state.experiment.formalPhase === 'recognition') body += `<button class="button button-primary" data-action="experiment-start">开始正式辨识</button>`
       else if (!formal) body += `<button class="button button-primary" data-action="experiment-start">开始试玩一轮</button><button class="button button-secondary" data-action="research-entry">进入正式实验</button>`
     }
-    if (model.stage === 'training') body += `<div class="experiment-status"><strong>统一训练和校准</strong><p>请先听完整规则、六个单点和多点示例，再完成固定校准题。训练数据不会计入正式结果。</p><button class="button button-success" data-action="research-calibration-pass">校准通过</button><button class="button button-quiet" data-action="research-calibration-fail">需要重试</button></div>`
+    if (formal && state.experiment.formalPhase === 'training') body = buildFormalTrainingHtml({ ...model, feedback: trainingFeedback, inputConfirmedCells: state.input.confirmedCells, inputCurrentDots: state.input.currentDots, inputCursorIndex: state.input.cursorIndex })
     if (model.stage === 'showcase') body += `<div class="experiment-status"><strong>展示阶段</strong><p>先听一次完整说明，随后依次播放六个声音。当前：<span id="showcase-current">准备开始</span></p><button class="button button-primary" data-action="experiment-confirm">我已听完展示，进入测试</button></div>`
     if (model.stage === 'listen' || model.stage === 'answer') {
       const trial = model.trials[model.index]
@@ -848,6 +919,32 @@ export function initApp() {
   function onInputCommit(cells) {
     if (state.page === 'learning' && state.learningTab === 'teaching' && state.teaching.item) {
       void commitLearning(cells)
+    } else if (state.page === 'experiment' && state.experimentTab === 'recognition' && experiment.snapshot().stage === 'training' && ['practice', 'calibration'].includes(experiment.snapshot().trainingStep)) {
+      const before = experiment.snapshot()
+      const trials = before.trainingStep === 'practice' ? before.trainingPracticeTrials : before.trainingCalibrationTrials
+      const trial = trials[before.trainingQuestionIndex]
+      const result = experiment.submitTrainingAnswer(cells)
+      if (!result.reason && result.record) void persistTrainingRecord(result.record)
+      if (result.reason) {
+        trainingFeedback = result.reason === 'training-question-not-played' ? '请先播放本题，再输入盲文。' : '当前还不能提交。'
+      } else {
+        trainingFeedback = result.correct ? '正确。' : '这道训练题不正确，请继续下一题。'
+        if (result.finished) {
+          state = completeTraining(state, { passed: result.passed })
+          void saveCurrentFormalSession({
+            trainingStarted: true,
+            trainingCompleted: result.passed,
+            calibrationPassed: result.passed,
+            calibrationAttempts: state.experiment.calibrationAttempts,
+            qualityFlags: state.experiment.qualityFlags,
+            analysisEligibility: result.passed ? 'incomplete' : 'calibration-failed'
+          })
+          trainingFeedback = result.passed
+            ? `校准通过（${result.score} / ${before.trainingCalibrationTrials.length}），可以进入正式辨识。`
+            : `校准未通过（${result.score} / ${before.trainingCalibrationTrials.length}），请重新训练和校准。`
+        }
+      }
+      render()
     } else if (state.page === 'experiment' && state.experimentTab === 'recognition' && experiment.snapshot().stage === 'answer') {
       const result = experiment.submit(cells)
       if (state.experiment.researchMode === 'formal') {
@@ -973,19 +1070,58 @@ export function initApp() {
       state = { ...state, input: { confirmedCells: [], currentDots: [] } }
       void playShowcase()
     }
-    else if (action === 'research-calibration-pass' || action === 'research-calibration-fail') {
-      const passed = action === 'research-calibration-pass'
-      experiment.completeCalibration(passed)
-      if (!passed) experiment.startTraining()
-      state = completeTraining(state, { passed })
-      void saveCurrentFormalSession({
-        trainingStarted: true,
-        trainingCompleted: passed,
-        calibrationPassed: passed,
-        calibrationAttempts: state.experiment.calibrationAttempts,
-        qualityFlags: state.experiment.qualityFlags,
-        analysisEligibility: passed ? 'incomplete' : 'calibration-failed'
-      })
+    else if (action === 'training-play-rules') {
+      if (trainingPlaybackBusy) return
+      trainingPlaybackBusy = true
+      trainingFeedback = ''
+      try {
+        await speakAndWait(buildTrainingRuleText(getLang()))
+        const current = experiment.snapshot()
+        if (current.stage === 'training' && current.trainingStep === 'rules') experiment.advanceTrainingStep()
+      } finally {
+        trainingPlaybackBusy = false
+        render()
+      }
+      return
+    }
+    else if (action === 'training-play-single' || action === 'training-play-multi') {
+      if (trainingPlaybackBusy) return
+      trainingPlaybackBusy = true
+      trainingFeedback = ''
+      try {
+        const examples = action === 'training-play-single' ? TRAINING_SINGLE_POINTS.map(dots => [dots]) : TRAINING_MULTI_EXAMPLES
+        const completed = await playTrainingExamples(examples)
+        const step = action === 'training-play-single' ? 'single-points' : 'multi-examples'
+        const current = experiment.snapshot()
+        if (completed && current.stage === 'training' && current.trainingStep === step) experiment.advanceTrainingStep()
+      } finally {
+        trainingPlaybackBusy = false
+        render()
+      }
+      return
+    }
+    else if (action === 'training-listen-question') {
+      if (trainingPlaybackBusy) return
+      const current = experiment.snapshot()
+      const trials = current.trainingStep === 'practice' ? current.trainingPracticeTrials : current.trainingCalibrationTrials
+      const trial = trials[current.trainingQuestionIndex]
+      if (!trial) return
+      trainingPlaybackBusy = true
+      trainingFeedback = ''
+      try {
+        const completed = await playTrainingExamples([trial.cells], 0.45)
+        if (completed && experiment.snapshot().stage === 'training') experiment.startTrainingQuestion()
+      } finally {
+        trainingPlaybackBusy = false
+        render()
+      }
+      return
+    }
+    else if (action === 'training-restart') {
+      experimentToken++
+      trainingFeedback = ''
+      experiment.startTraining()
+      state = { ...state, input: { confirmedCells: [], currentDots: [], cursorIndex: 0 } }
     }
     else if (action === 'experiment-confirm') { experimentToken++; cancelSpeech(); experiment.confirmShowcase(); render() }
     else if (action === 'experiment-listen') {
@@ -1071,6 +1207,19 @@ export function initApp() {
     else if (action === 'notes-new') { notes.newNote(); loadEditorText('notes', '') }
     else if (TOP_LEVEL_PAGES.includes(action)) { experimentToken++; reader.stop(); readerPlayToken += 1; cancelSpeech(); state = { ...state, page: action, input: { confirmedCells: [], currentDots: [] } } }
     render()
+  }
+
+  async function playTrainingExamples(examples, duration = 0.55) {
+    const token = ++experimentToken
+    for (const cells of examples) {
+      if (token !== experimentToken) return false
+      for (const cell of buildCellSequence(cells)) {
+        if (token !== experimentToken) return false
+        await playAudioBraille(cell, { duration })
+        await new Promise(resolve => setTimeout(resolve, 180))
+      }
+    }
+    return token === experimentToken
   }
 
   async function playShowcase() {

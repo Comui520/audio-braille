@@ -1,6 +1,6 @@
-export const STUDY_VERSION = 'v13-1'
-export const PROTOCOL_VERSION = 'protocol-v13-1'
-export const CLIENT_VERSION = 'web-v13-1'
+export const STUDY_VERSION = 'v13-2'
+export const PROTOCOL_VERSION = 'protocol-v13-2'
+export const CLIENT_VERSION = 'web-v13-2'
 export const RECOGNITION_BANK_VERSION = 'recognition-v13-1'
 export const READER_BANK_VERSION = 'reader-v13-1'
 export const DATA_CLASSES = ['casual', 'training', 'formal']

@@ -31,6 +31,38 @@ export function buildShowcaseInstruction(lang = 'zh') {
   return '展示开始。点一、二、三使用左耳正弦波；点四、五、六使用右耳方波。每列从上到下分别是高音、中音、低音。现在按顺序播放六个声音。'
 }
 
+// 正式实验统一训练固定内容：规则 → 六个单点 → 多点示例 → 不计分练习 → 校准。
+export const TRAINING_STEPS = ['rules', 'single-points', 'multi-examples', 'practice', 'calibration']
+export const TRAINING_SINGLE_POINTS = [[1], [2], [3], [4], [5], [6]]
+export const TRAINING_MULTI_EXAMPLES = [[[1, 2]], [[4, 5]], [[1, 3, 5]], [[2, 4, 6]]]
+export const TRAINING_PRACTICE_TRIALS = [
+  { id: 'practice-1', label: '点一', cells: [[1]] },
+  { id: 'practice-2', label: '点四', cells: [[4]] },
+  { id: 'practice-3', label: '点一和点四', cells: [[1, 4]] }
+]
+export const TRAINING_CALIBRATION_TRIALS = [
+  { id: 'calibration-1', label: '校准一', cells: [[2]] },
+  { id: 'calibration-2', label: '校准二', cells: [[5, 6]] },
+  { id: 'calibration-3', label: '校准三', cells: [[1, 3, 4]] }
+]
+export const CALIBRATION_PASS_SCORE = 2
+export const TRAINING_BANK_VERSION = 'training-v13-2'
+
+export function buildTrainingRuleText(lang = 'zh') {
+  if (lang === 'en') return 'This is the AudioBraille training and calibration. Each braille cell is played as a chord. Dots one, two and three are in the left ear with sine waves; dots four, five and six are in the right ear with square waves. The top, middle and bottom positions are high, middle and low pitch. You will first hear the rules, then six single-dot examples, several multi-dot examples, unscored practice, and fixed calibration questions. Training data is not included in the main formal results.'
+  return '这是 AudioBraille 统一训练和校准。每个盲文方会作为和弦播放。点一、二、三在左耳使用正弦波，点四、五、六在右耳使用方波；每列从上到下分别是高音、中音和低音。接下来先听完整规则，再听六个单点和多点示例，然后完成不计分练习，最后完成固定校准题。训练数据不会计入正式实验主要结果。'
+}
+
+export function buildTrainingPlan() {
+  return {
+    steps: [...TRAINING_STEPS],
+    singlePoints: TRAINING_SINGLE_POINTS.map(cell => [...cell]),
+    multiExamples: TRAINING_MULTI_EXAMPLES.map(cell => cell.map(dot => [...dot])),
+    practiceTrials: TRAINING_PRACTICE_TRIALS.map(trial => ({ ...trial, cells: trial.cells.map(cell => [...cell]) })),
+    calibrationTrials: TRAINING_CALIBRATION_TRIALS.map(trial => ({ ...trial, cells: trial.cells.map(cell => [...cell]) }))
+  }
+}
+
 
 // 随机不重复字母
 export function pickLetters(n = 10) {
@@ -157,6 +189,12 @@ export function createExperimentModel({
   let calibrationPassed = null
   let calibrationAttempts = 0
   let qualityFlags = []
+  let trainingStep = 'idle'
+  let trainingQuestionIndex = 0
+  let trainingQuestionStarted = false
+  let trainingQuestionStartedAt = null
+  let trainingPracticeResults = []
+  let trainingCalibrationResults = []
   let roundNumber = 0
   let replayCount = 0
 
@@ -190,6 +228,15 @@ export function createExperimentModel({
       calibrationPassed,
       calibrationAttempts,
       qualityFlags: [...qualityFlags],
+      trainingStep,
+      trainingQuestionIndex,
+      trainingQuestionStarted,
+      trainingQuestionStartedAt,
+      trainingPracticeTrials: TRAINING_PRACTICE_TRIALS.map(trial => ({ ...trial, cells: trial.cells.map(cell => [...cell]) })),
+      trainingCalibrationTrials: TRAINING_CALIBRATION_TRIALS.map(trial => ({ ...trial, cells: trial.cells.map(cell => [...cell]) })),
+      trainingPracticeResults: trainingPracticeResults.map(result => ({ ...result, responseCells: result.responseCells.map(cell => [...cell]) })),
+      trainingCalibrationResults: trainingCalibrationResults.map(result => ({ ...result, responseCells: result.responseCells.map(cell => [...cell]) })),
+      trainingCalibrationScore: trainingCalibrationResults.filter(result => result.correct).length,
       trials: trials.map(copyTrial),
       index,
       results: results.map(copyResult)
@@ -236,7 +283,6 @@ export function createExperimentModel({
   }
 
   function startTraining() {
-    if (stage === 'training') return snapshot()
     const wasStarted = trainingStarted
     trainingStarted = true
     trainingCompleted = false
@@ -246,8 +292,88 @@ export function createExperimentModel({
       calibrationAttempts = 0
       qualityFlags = []
     }
+    trainingStep = 'rules'
+    trainingQuestionIndex = 0
+    trainingQuestionStarted = false
+    trainingQuestionStartedAt = null
+    trainingPracticeResults = []
+    trainingCalibrationResults = []
     stage = 'training'
     return snapshot()
+  }
+
+  function advanceTrainingStep() {
+    if (stage !== 'training') return snapshot()
+    const index = TRAINING_STEPS.indexOf(trainingStep)
+    if (index < 0 || index >= TRAINING_STEPS.length - 1) return snapshot()
+    trainingStep = TRAINING_STEPS[index + 1]
+    trainingQuestionIndex = 0
+    trainingQuestionStarted = false
+    trainingQuestionStartedAt = null
+    return snapshot()
+  }
+
+  function startTrainingQuestion() {
+    if (stage !== 'training' || !['practice', 'calibration'].includes(trainingStep)) return snapshot()
+    const trials = trainingStep === 'practice' ? TRAINING_PRACTICE_TRIALS : TRAINING_CALIBRATION_TRIALS
+    if (!trials[trainingQuestionIndex]) return snapshot()
+    if (trainingQuestionStarted) return snapshot()
+    trainingQuestionStarted = true
+    trainingQuestionStartedAt = Date.now()
+    return snapshot()
+  }
+
+  function submitTrainingAnswer(given) {
+    if (stage !== 'training' || !['practice', 'calibration'].includes(trainingStep)) {
+      return { correct: false, finished: false, state: snapshot(), reason: 'training-not-active' }
+    }
+    if (!trainingQuestionStarted) {
+      return { correct: false, finished: false, state: snapshot(), reason: 'training-question-not-played' }
+    }
+    const trials = trainingStep === 'practice' ? TRAINING_PRACTICE_TRIALS : TRAINING_CALIBRATION_TRIALS
+    const trial = trials[trainingQuestionIndex]
+    if (!trial) return { correct: false, finished: false, state: snapshot(), reason: 'training-question-missing' }
+    const responseCells = Array.isArray(given) ? given.map(cell => [...cell]) : []
+    const correct = gradeCells(trial.cells, responseCells)
+    const submittedAt = Date.now()
+    const listenStartedAt = trainingQuestionStartedAt
+    const record = {
+      trialId: `${sessionId || 'session'}:training:${trainingStep}:${trainingQuestionIndex}:${trial.id}`,
+      stimulusId: `training:${trainingStep}:${trial.id}`,
+      bankVersion: TRAINING_BANK_VERSION,
+      trialIndex: trainingQuestionIndex,
+      mode: trainingStep,
+      phase: 'training',
+      dataClass: 'training',
+      studyVersion,
+      listenStartedAt,
+      submittedAt,
+      reactionTimeMs: typeof listenStartedAt === 'number' ? Math.max(0, submittedAt - listenStartedAt) : null,
+      replayCount: 0,
+      responseCells,
+      expectedCellsHash: hashCells(trial.cells),
+      correct
+    }
+    const result = { trialId: trial.id, trialIndex: trainingQuestionIndex, responseCells, correct, record }
+    if (trainingStep === 'practice') trainingPracticeResults.push(result)
+    else trainingCalibrationResults.push(result)
+    trainingQuestionIndex += 1
+    trainingQuestionStarted = false
+    trainingQuestionStartedAt = null
+    if (trainingStep === 'practice' && trainingQuestionIndex >= TRAINING_PRACTICE_TRIALS.length) {
+      trainingStep = 'calibration'
+      trainingQuestionIndex = 0
+    }
+    if (trainingStep === 'calibration' && trainingQuestionIndex >= TRAINING_CALIBRATION_TRIALS.length) {
+      calibrationAttempts += 1
+      calibrationPassed = trainingCalibrationResults.filter(item => item.correct).length >= CALIBRATION_PASS_SCORE
+      trainingCompleted = true
+      if (!calibrationPassed && !qualityFlags.includes('calibration-failed')) qualityFlags.push('calibration-failed')
+      trainingStep = 'complete'
+      stage = 'idle'
+      return { ...result, finished: true, passed: calibrationPassed, score: trainingCalibrationResults.filter(item => item.correct).length, state: snapshot() }
+    }
+    return { ...result, finished: false, state: snapshot() }
   }
 
   function completeCalibration(passed = false) {
@@ -328,7 +454,7 @@ export function createExperimentModel({
   }
 
   return {
-    snapshot, selectMode, start, startTraining, completeCalibration, replay,
+    snapshot, selectMode, start, startTraining, advanceTrainingStep, startTrainingQuestion, submitTrainingAnswer, completeCalibration, replay,
     confirmShowcase, listen, submit, restart
   }
 }

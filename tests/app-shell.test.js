@@ -11,7 +11,8 @@ import {
   buildFormalCompleteHtml,
   buildReaderSpeedHtml,
   buildFormalUploadStatusHtml,
-  buildExamReferenceMaskHtml
+  buildExamReferenceMaskHtml,
+  buildFormalTrainingHtml
 } from '../src/app.js'
 
 describe('v12 应用壳', () => {
@@ -68,6 +69,23 @@ describe('v12 应用壳', () => {
     expect(html).toContain('无调')
   })
 
+  it('正式训练页面提供不可跳过的五步操作而非手工通过按钮', () => {
+    const base = {
+      stage: 'training', trainingStep: 'rules', trainingQuestionIndex: 0,
+      trainingQuestionStarted: false, trainingPracticeTrials: [], trainingCalibrationTrials: []
+    }
+    expect(buildFormalTrainingHtml(base)).toContain('data-action="training-play-rules"')
+    expect(buildFormalTrainingHtml({ ...base, trainingStep: 'single-points' })).toContain('data-action="training-play-single"')
+    expect(buildFormalTrainingHtml({ ...base, trainingStep: 'multi-examples' })).toContain('data-action="training-play-multi"')
+    expect(buildFormalTrainingHtml({ ...base, trainingStep: 'practice', trainingPracticeTrials: [{ id: 'p1' }] })).toContain('data-action="training-listen-question"')
+    expect(buildFormalTrainingHtml({ ...base, trainingStep: 'calibration', trainingCalibrationTrials: [{ id: 'c1' }] })).toContain('固定校准题')
+    expect(buildFormalTrainingHtml({ ...base, trainingStep: 'single-points' })).toContain('composition-display')
+    expect(buildFormalTrainingHtml({ ...base, trainingStep: 'multi-examples' })).toContain('composition-display')
+    expect(buildFormalTrainingHtml({ ...base, trainingStep: 'practice', trainingPracticeTrials: [{ id: 'p1' }] })).toContain('composition-display')
+    expect(buildFormalTrainingHtml({ ...base, trainingStep: 'calibration', trainingCalibrationTrials: [{ id: 'c1' }] })).toContain('composition-display')
+    expect(buildFormalTrainingHtml(base)).not.toContain('research-calibration-pass')
+    expect(buildFormalTrainingHtml(base)).not.toContain('校准通过</button>')
+  })
   it('考试答案遮罩提供可访问的查看按钮', () => {
     const html = buildExamReferenceMaskHtml()
     expect(html).toContain('lesson-reference-mask')
