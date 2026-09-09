@@ -12,16 +12,17 @@ import {
   buildReaderSpeedHtml,
   buildFormalUploadStatusHtml,
   buildExamReferenceMaskHtml,
-  buildFormalTrainingHtml
+  buildFormalTrainingHtml,
+  buildExperienceReaderHtml
 } from '../src/app.js'
 
 describe('v12 应用壳', () => {
-  it('顶层导航只有四项', () => {
-    expect(buildTopNav().map(item => item.id)).toEqual(['home', 'learning', 'experiment', 'notes'])
+  it('顶层导航包含独立体验听书入口', () => {
+    expect(buildTopNav().map(item => item.id)).toEqual(['home', 'learning', 'experiment', 'reader', 'notes'])
   })
 
-  it('首页入口只保留学习、实验和笔记', () => {
-    expect(buildHomeActions().map(item => item.action)).toEqual(['learning', 'experiment', 'notes'])
+  it('首页入口包含独立体验听书', () => {
+    expect(buildHomeActions().map(item => item.action)).toEqual(['learning', 'experiment', 'reader', 'notes'])
   })
 
   it('笔记文档视图只生成 textarea，不生成自定义文档方块', () => {
@@ -41,6 +42,21 @@ describe('v12 应用壳', () => {
   })
 
 
+  it('体验听书提供书籍章节选择、明文盲文对照和播放控制', () => {
+    const html = buildExperienceReaderHtml({
+      books: [{ bookId: 'b1', title: '一本书', chapters: [{ chapterId: 'c1', title: '第一章' }] }],
+      chapters: [{ chapterId: 'c1', bookId: 'b1', title: '第一章', text: '明文', brailleCells: [[1], [1, 2]] }],
+      selectedBookId: 'b1',
+      selectedChapterId: 'c1'
+    })
+    expect(html).toContain('体验听书')
+    expect(html).toContain('experience-book')
+    expect(html).toContain('experience-chapter')
+    expect(html).toContain('明文')
+    expect(html).toContain('盲文')
+    expect(html).toContain('reader-play')
+    expect(html).toContain('data-cell-index="0"')
+  })
   it('正式听书固定 1 倍速，试玩听书保留倍速控制', () => {
     expect(buildReaderSpeedHtml({ formal: true, speed: 3 })).toContain('正式实验固定 1x')
     expect(buildReaderSpeedHtml({ formal: true, speed: 3 })).not.toContain('type="range"')
@@ -99,3 +115,4 @@ describe('v12 应用壳', () => {
     })
   })
 })
+

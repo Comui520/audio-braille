@@ -69,6 +69,33 @@ const PASSAGE_SEEDS = [
   ['完整安排', '在开始一项长期工作之前，团队会讨论目标、分工、时间安排、检查方式和遇到问题时的应对办法。', 'zai4 kai1 shi3 yi1 xiang4 chang2 qi1 gong1 zuo4 zhi1 qian2 tuan2 dui4 hui4 tao3 lun4 mu4 biao1 fen1 gong1 shi2 jian1 an1 pai2 jian3 cha2 fang1 shi4 he2 yu4 dao4 wen4 ti2 shi2 de5 ying4 dui4 ban4 fa3', 'work', 'high']
 ]
 
+const EXPERIENCE_CHAPTER_SPECS = [
+  {
+    bookId: 'everyday-audiobraille',
+    title: '日常生活小书',
+    chapters: [
+      { chapterId: 'everyday-1', title: '第一章 早晨出发', passageIds: ['reader-001', 'reader-007', 'reader-008'] },
+      { chapterId: 'everyday-2', title: '第二章 回家的路', passageIds: ['reader-002', 'reader-004', 'reader-005'] }
+    ]
+  },
+  {
+    bookId: 'nature-audiobraille',
+    title: '自然观察记',
+    chapters: [
+      { chapterId: 'nature-1', title: '第一章 四季的声音', passageIds: ['reader-009', 'reader-011', 'reader-012'] },
+      { chapterId: 'nature-2', title: '第二章 河流与树木', passageIds: ['reader-010', 'reader-013', 'reader-014'] }
+    ]
+  },
+  {
+    bookId: 'learning-audiobraille',
+    title: '学习与工作札记',
+    chapters: [
+      { chapterId: 'learning-1', title: '第一章 学会阅读', passageIds: ['reader-017', 'reader-018', 'reader-019'] },
+      { chapterId: 'learning-2', title: '第二章 一起完成任务', passageIds: ['reader-023', 'reader-024', 'reader-025'] }
+    ]
+  }
+]
+
 function lengthStratum(text) {
   const length = [...text].length
   return length < 24 ? 'short' : length < 28 ? 'medium' : 'long'
@@ -89,6 +116,29 @@ export const READER_PASSAGES = PASSAGE_SEEDS.map(([title, text, pinyin, topicStr
     brailleCells
   }
 })
+
+export const EXPERIENCE_BOOKS = EXPERIENCE_CHAPTER_SPECS.map(book => ({
+  bookId: book.bookId,
+  title: book.title,
+  chapters: book.chapters.map(({ chapterId, title }) => ({ chapterId, title }))
+}))
+
+export const EXPERIENCE_CHAPTERS = EXPERIENCE_CHAPTER_SPECS.flatMap(book => book.chapters.map(spec => {
+  const passages = spec.passageIds.map(id => READER_PASSAGES.find(passage => passage.passageId === id)).filter(Boolean)
+  if (passages.length !== spec.passageIds.length) throw new Error(`Invalid experience chapter: ${spec.chapterId}`)
+  return {
+    chapterId: spec.chapterId,
+    bookId: book.bookId,
+    bookTitle: book.title,
+    title: spec.title,
+    text: passages.map(passage => passage.text).join(' '),
+    brailleCells: passages.flatMap(passage => passage.brailleCells.map(cell => [...cell]))
+  }
+}))
+
+export function getExperienceChapters(bookId) {
+  return EXPERIENCE_CHAPTERS.filter(chapter => chapter.bookId === bookId)
+}
 
 
 function seededRandom(seed) {
@@ -124,3 +174,4 @@ export function sampleReaderPassages(passages = READER_PASSAGES, count = 3, seed
   }
   return selected
 }
+

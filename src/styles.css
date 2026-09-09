@@ -216,3 +216,16 @@ kbd { display: inline-block; min-width: 1.7em; padding: .12em .35em; border: 1px
 .training-steps .is-done { color: var(--success); }
 .training-current, .training-feedback { margin-top: .75rem; color: var(--brand); font-weight: 700; }
 .training-step-content { margin-top: 1rem; }
+.reader-library-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 1.25rem 0; }
+.reader-library-picker label { display: grid; gap: .4rem; color: var(--text-muted); font-weight: 700; }
+.reader-library-picker select { min-height: 2.7rem; padding: .45rem .65rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; }
+.reader-comparison { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin: 1rem 0; }
+.reader-text-column, .reader-braille-column { min-width: 0; padding: 1rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-muted); }
+.reader-text-column h2, .reader-braille-column h2 { margin-top: 0; font-size: 1.05rem; }
+.reader-text-column p { white-space: pre-wrap; line-height: 1.9; }
+.braille-playback { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; max-height: 18rem; overflow: auto; line-height: 1.9; }
+.braille-playback-cell { display: inline-flex; min-width: 1.8rem; min-height: 2.3rem; align-items: center; justify-content: center; padding: .1rem .25rem; border: 2px solid transparent; border-radius: .45rem; font-size: 1.55rem; }
+.braille-playback-cell.is-playing { border-color: var(--brand); background: #dbe6ff; box-shadow: 0 0 0 2px #b7ccff; }
+.reader-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: 1rem 0; }
+.reader-casual-note { color: var(--text-muted); font-size: .92rem; }
+@media (max-width: 700px) { .reader-comparison, .reader-library-picker { grid-template-columns: 1fr; } .braille-playback { max-height: 14rem; } }

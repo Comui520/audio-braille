@@ -1,5 +1,5 @@
 // src/app-state.js —— v13：单一应用状态与纯更新函数
-export const TOP_LEVEL_PAGES = ['home', 'learning', 'experiment', 'notes']
+export const TOP_LEVEL_PAGES = ['home', 'learning', 'experiment', 'reader', 'notes']
 export const LEARNING_TABS = ['teaching', 'input']
 export const EXPERIMENT_TABS = ['recognition', 'reader']
 export const FORMAL_RECOGNITION_MODES = ['letters', 'syllables', 'symbols', 'digits']

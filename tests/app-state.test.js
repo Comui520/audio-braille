@@ -15,9 +15,9 @@ import {
 } from '../src/app-state.js'
 
 describe('v9 app state', () => {
-  it('默认进入首页并使用四个顶层入口', () => {
+  it('默认进入首页并使用五个顶层入口', () => {
     const state = createAppState()
-    expect(TOP_LEVEL_PAGES).toEqual(['home', 'learning', 'experiment', 'notes'])
+    expect(TOP_LEVEL_PAGES).toEqual(['home', 'learning', 'experiment', 'reader', 'notes'])
     expect(state.page).toBe('home')
     expect(state.learningTab).toBe('teaching')
     expect(state.experimentTab).toBe('recognition')
@@ -25,7 +25,7 @@ describe('v9 app state', () => {
 
   it('导航只接受有效页面', () => {
     expect(navigate(createAppState(), 'learning').page).toBe('learning')
-    expect(navigate(createAppState(), 'reader').page).toBe('home')
+    expect(navigate(createAppState(), 'reader').page).toBe('reader')
   })
 
   it('标签切换不改变顶层页面', () => {

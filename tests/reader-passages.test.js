@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { READER_BANK_VERSION, READER_PASSAGES, sampleReaderPassages } from '../src/data/reader-passages.js'
+import { READER_BANK_VERSION, READER_PASSAGES, sampleReaderPassages, EXPERIENCE_BOOKS, EXPERIENCE_CHAPTERS, getExperienceChapters } from '../src/data/reader-passages.js'
 import { buildPassageSequence, createReaderTrialRecord } from '../src/reader.js'
 
 describe('听书材料库', () => {
@@ -27,6 +27,14 @@ describe('听书材料库', () => {
     )
   })
 
+  it('体验听书提供多本书和较长章节，章节明文与盲文方序列一一对应', () => {
+    expect(EXPERIENCE_BOOKS.length).toBeGreaterThanOrEqual(3)
+    expect(EXPERIENCE_CHAPTERS.length).toBeGreaterThanOrEqual(6)
+    expect(new Set(EXPERIENCE_CHAPTERS.map(item => item.chapterId)).size).toBe(EXPERIENCE_CHAPTERS.length)
+    expect(EXPERIENCE_CHAPTERS.every(item => item.text.length >= 60 && item.brailleCells.length > 100)).toBe(true)
+    expect(getExperienceChapters(EXPERIENCE_BOOKS[0].bookId).length).toBeGreaterThan(0)
+  })
+
   it('听书结果记录是否听懂和概括文本', () => {
     expect(createReaderTrialRecord({ passageId: 'reader-001', selfReportedUnderstood: true, summaryText: '摘要' }))
       .toMatchObject({ passageId: 'reader-001', selfReportedUnderstood: true, summaryText: '摘要', summarySubmitted: true })
@@ -34,3 +42,4 @@ describe('听书材料库', () => {
       .toMatchObject({ completed: false, summarySubmitted: false })
   })
 })
+

@@ -17,7 +17,7 @@ import { createProgressStore } from './curriculum.js'
 import { getTeachingCategories, getTeachingSections, getTeachingItems, getTeachingItem, markTeachingLearned, buildItemSpeech } from './teaching.js'
 import { createExperimentModel, buildShowcase, buildShowcaseInstruction, buildTrainingRuleText, TRAINING_SINGLE_POINTS, TRAINING_MULTI_EXAMPLES, TRAINING_PRACTICE_TRIALS, TRAINING_CALIBRATION_TRIALS, CALIBRATION_PASS_SCORE } from './experiment.js'
 import { createReader, SAMPLE_BRAILLE, buildReaderComprehensionHtml, createReaderTrialRecord } from './reader.js'
-import { READER_PASSAGES, sampleReaderPassages } from './data/reader-passages.js'
+import { READER_PASSAGES, sampleReaderPassages, EXPERIENCE_BOOKS, EXPERIENCE_CHAPTERS, getExperienceChapters } from './data/reader-passages.js'
 import { initNotes } from './notes.js'
 import { playAudioBraille, buildCellSequence, unlockAudio } from './audio-braille.js'
 import { speak, speakAndWait, cancelSpeech } from './speech.js'
@@ -52,6 +52,7 @@ export function buildTopNav(lang = 'zh') {
     { id: 'home', label: lang === 'en' ? 'Home' : '首页' },
     { id: 'learning', label: lang === 'en' ? 'Learn Braille' : '学习盲文' },
     { id: 'experiment', label: lang === 'en' ? 'AudioBraille Lab' : 'AudioBraille 实验' },
+    { id: 'reader', label: lang === 'en' ? 'Try Listening' : '体验听书' },
     { id: 'notes', label: lang === 'en' ? 'Notes' : '笔记' }
   ]
 }
@@ -66,6 +67,7 @@ export function buildHomeActions() {
   return [
     { action: 'learning', icon: '学', label: '学习盲文' },
     { action: 'experiment', icon: '听', label: 'AudioBraille 实验' },
+    { action: 'reader', icon: '书', label: '体验听书' },
     { action: 'notes', icon: '记', label: '笔记' }
   ]
 }
@@ -77,6 +79,15 @@ export function appendSpace(existing = '') {
 export function buildReaderSpeedHtml({ formal = false, speed = 1 } = {}) {
   if (formal) return '<span class="formal-speed-lock">正式实验固定 1x</span>'
   return `<label class="range-label">速度 <input id="reader-speed" type="range" min="0.5" max="5" step="0.5" value="${speed}"><output>${speed}x</output></label>`
+}
+
+export function buildExperienceReaderHtml({ books = [], chapters = [], selectedBookId = '', selectedChapterId = '', speed = 1, completed = false, progressText = '' } = {}) {
+  const selectedBook = books.find(book => book.bookId === selectedBookId) || books[0]
+  const selectedChapter = chapters.find(chapter => chapter.chapterId === selectedChapterId) || chapters.find(chapter => chapter.bookId === selectedBook?.bookId) || chapters[0]
+  const availableChapters = chapters.filter(chapter => chapter.bookId === selectedBook?.bookId)
+  const cells = selectedChapter?.brailleCells || []
+  const cellHtml = cells.map((cell, index) => `<span class="braille-playback-cell" data-cell-index="${index}" aria-label="盲文第 ${index + 1} 方">${esc(dotsToUnicode(cell))}</span>`).join('')
+  return `<section class="page page-reader"><div class="page-heading"><div><p class="eyebrow">LISTENING ROOM</p><h1>体验听书</h1></div></div><p class="lead">选择一本小书和章节，对照明文与盲文，体验 AudioBraille 的逐方播放。</p><div class="reader-library-picker"><label>书籍<select id="experience-book" data-field="experience-book">${books.map(book => `<option value="${esc(book.bookId)}"${book.bookId === selectedBook?.bookId ? ' selected' : ''}>${esc(book.title)}</option>`).join('')}</select></label><label>章节<select id="experience-chapter" data-field="experience-chapter">${availableChapters.map(chapter => `<option value="${esc(chapter.chapterId)}"${chapter.chapterId === selectedChapter?.chapterId ? ' selected' : ''}>${esc(chapter.title)}</option>`).join('')}</select></label></div>${selectedChapter ? `<p class="reader-passage-meta">${esc(selectedChapter.bookTitle)} · ${esc(selectedChapter.title)} · ${cells.length} 方</p><div class="reader-comparison"><article class="reader-text-column"><h2>明文</h2><p>${esc(selectedChapter.text)}</p></article><article class="reader-braille-column"><h2>盲文对照</h2><div class="braille-playback" id="experience-braille" aria-label="盲文对照">${cellHtml}</div></article></div>` : '<p class="empty-state">暂无可用章节。</p>'}<div class="reader-controls"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-pause">暂停</button><button class="button button-quiet" data-action="reader-resume">继续</button><button class="button button-quiet" data-action="reader-stop">停止</button>${buildReaderSpeedHtml({ speed })}</div><p id="reader-progress" aria-live="polite">${esc(progressText || (completed ? '本章播放完成。' : '尚未播放'))}</p><p class="reader-casual-note">这是独立体验功能，不需要进入正式实验，也不会产生正式实验结果。</p></section>`
 }
 
 export function buildFormalUploadStatusHtml(status = 'idle') {
@@ -367,6 +378,8 @@ export function initApp() {
   let inputOutput = ''
   let progressCache = {}
   let currentReaderText = SAMPLE_BRAILLE
+  let selectedExperienceBookId = EXPERIENCE_BOOKS[0]?.bookId || ''
+  let selectedExperienceChapterId = EXPERIENCE_CHAPTERS[0]?.chapterId || ''
   const readerAtoms = editorTextToAtoms(SAMPLE_BRAILLE)
   const editorDocuments = {
     online: { cells: [], cursor: 0 },
@@ -600,7 +613,7 @@ export function initApp() {
           <button class="button button-quiet" data-action="speak-guide">朗读说明</button>
         </div>
       </details>
-      <div class="home-actions">${buildHomeActions().map(item => `<button class="home-action" data-action="${item.action}"><span class="action-icon">${item.icon}</span><span>${item.label}</span><small>${item.action === 'experiment' ? '听觉辨识与听书场景' : item.action === 'learning' ? '从字母、拼音到数字和符号' : '记录、导入、导出与朗读'}</small></button>`).join('')}</div>
+      <div class="home-actions">${buildHomeActions().map(item => `<button class="home-action" data-action="${item.action}"><span class="action-icon">${item.icon}</span><span>${item.label}</span><small>${item.action === 'experiment' ? '听觉辨识与正式听书场景' : item.action === 'reader' ? '选择章节，对照明文与盲文听一段书' : item.action === 'learning' ? '从字母、拼音到数字和符号' : '记录、导入、导出与朗读'}</small></button>`).join('')}</div>
     </section>`
   }
 
@@ -715,6 +728,21 @@ export function initApp() {
     return `<div class="reader-panel"><h2>听书场景</h2><p>播放当前材料，完成后再填写理解反馈。</p>${formalReader ? `<p class="reader-passage-meta">第 ${formalReaderIndex + 1} / ${readerPassages.length} 段材料 · ${esc(selectedReaderPassage.topicStratum)} · ${esc(selectedReaderPassage.difficultyStratum)}</p>` : ''}<div class="reader-input-preview">${inputDisplayHtml(composition, input.currentDots, compositionCursor, '当前多方输入')}</div>${formalReader ? '' : buildTextareaDocumentHtml(currentReaderText, { id: 'reader-text', rows: 4, label: '盲文内容' })}${buildReaderSpeedHtml({ formal: formalReader, speed: formalReader ? 1 : reader.getSpeed() })}<div class="button-row"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-pause">暂停</button><button class="button button-quiet" data-action="reader-resume">继续</button><button class="button button-quiet" data-action="reader-stop">停止</button></div><div id="reader-progress" aria-live="polite"></div>${buildReaderComprehensionHtml({ completed: readerCompleted, understood: readerUnderstood, summaryText: readerSummary })}${experimentEntryError ? `<p class="form-error" role="alert">${esc(experimentEntryError)}</p>` : ""}</div>`
   }
 
+  function renderExperienceReader() {
+    const chapters = getExperienceChapters(selectedExperienceBookId)
+    const chapter = chapters.find(item => item.chapterId === selectedExperienceChapterId) || chapters[0] || EXPERIENCE_CHAPTERS[0]
+    if (chapter && chapter.chapterId !== selectedExperienceChapterId) selectedExperienceChapterId = chapter.chapterId
+    return buildExperienceReaderHtml({
+      books: EXPERIENCE_BOOKS,
+      chapters: EXPERIENCE_CHAPTERS,
+      selectedBookId: selectedExperienceBookId,
+      selectedChapterId: chapter?.chapterId || selectedExperienceChapterId,
+      speed: reader.getSpeed(),
+      completed: readerCompleted,
+      progressText: document.querySelector('#reader-progress')?.textContent || ''
+    })
+  }
+
   function renderNotes() {
     const legacy = notes.view()
     legacy.querySelector('h1')?.remove()
@@ -756,7 +784,7 @@ export function initApp() {
       if (item) button.textContent = item.label
       button.setAttribute('aria-current', button.dataset.action === state.page ? 'true' : 'false')
     })
-    let html = state.page === 'home' ? renderHome() : state.page === 'learning' ? renderLearning() : state.page === 'experiment' ? renderExperiment() : renderNotes()
+    let html = state.page === 'home' ? renderHome() : state.page === 'learning' ? renderLearning() : state.page === 'experiment' ? renderExperiment() : state.page === 'reader' ? renderExperienceReader() : renderNotes()
     main.innerHTML = html
     if (state.page === 'notes') notes.updateReference?.()
     bindDynamicState()
@@ -780,6 +808,25 @@ export function initApp() {
     readerText?.addEventListener('input', () => {
       currentReaderText = readerText.value
       loadEditorText('reader', currentReaderText, readerText.selectionStart)
+    })
+    const experienceBook = document.querySelector('#experience-book')
+    experienceBook?.addEventListener('change', () => {
+      selectedExperienceBookId = experienceBook.value
+      selectedExperienceChapterId = getExperienceChapters(selectedExperienceBookId)[0]?.chapterId || ''
+      reader.stop()
+      readerPlayToken += 1
+      readerCompleted = false
+      activeReaderGeneration = null
+      render()
+    })
+    const experienceChapter = document.querySelector('#experience-chapter')
+    experienceChapter?.addEventListener('change', () => {
+      selectedExperienceChapterId = experienceChapter.value
+      reader.stop()
+      readerPlayToken += 1
+      readerCompleted = false
+      activeReaderGeneration = null
+      render()
     })
     const readerPassage = document.querySelector('#reader-passage')
     readerPassage?.addEventListener('change', () => {
@@ -1165,7 +1212,8 @@ export function initApp() {
       readerPlayToken += 1
       const playToken = readerPlayToken
       if (state.experiment.researchMode === 'formal') reader.setSpeed(1)
-      const playText = state.experiment.researchMode === 'formal' ? selectedReaderPassage.brailleCells : (document.querySelector('#reader-text')?.value || SAMPLE_BRAILLE)
+      const experienceChapter = EXPERIENCE_CHAPTERS.find(chapter => chapter.chapterId === selectedExperienceChapterId)
+      const playText = state.page === 'reader' ? (experienceChapter?.brailleCells || []) : state.experiment.researchMode === 'formal' ? selectedReaderPassage.brailleCells : (document.querySelector('#reader-text')?.value || SAMPLE_BRAILLE)
       currentReaderText = Array.isArray(playText) ? playText.map(dots => dotsToUnicode(dots)).join('') : playText
       activeReaderGeneration = reader.snapshot().generation + 1
       const playPromise = reader.play(playText)
