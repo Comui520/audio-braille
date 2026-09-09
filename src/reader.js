@@ -121,6 +121,7 @@ export function createReader({ onTick = null, onComplete = null, onCellStart = n
     async play(text) {
       if (playing) return
       const token = ++generation
+      pauseCount = 0
       playing = true
       paused = false
       position = 0

@@ -42,6 +42,17 @@ describe('v9 reader lifecycle', () => {
     expect(starts[1][1]).toEqual([2, 3])
     expect(ends).toEqual([0, 1])
   })
+  it('每次新的播放从零开始计算暂停次数', async () => {
+    const reader = createReader()
+    const first = reader.play([[1]])
+    reader.pause()
+    reader.stop()
+    await first
+    expect(reader.snapshot().pauseCount).toBe(1)
+    await reader.play([[2]])
+    expect(reader.snapshot().pauseCount).toBe(0)
+  })
+
   it('停止播放不会触发完成回调，暂停会累计次数', async () => {
     let completed = 0
     const reader = createReader({ onComplete: () => { completed += 1 } })

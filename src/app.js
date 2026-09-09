@@ -879,6 +879,8 @@ export function initApp() {
        experienceReaderPlayToken += 1
        experienceReaderCompleted = false
        experienceActiveReaderGeneration = null
+       experienceReaderPlayStartedAt = null
+       experienceReaderReplayCount = 0
        render()
     })
     const experienceChapter = document.querySelector('#experience-chapter')
@@ -888,6 +890,8 @@ export function initApp() {
        experienceReaderPlayToken += 1
        experienceReaderCompleted = false
        experienceActiveReaderGeneration = null
+       experienceReaderPlayStartedAt = null
+       experienceReaderReplayCount = 0
        render()
     })
     const readerPassage = document.querySelector('#reader-passage')
@@ -1145,7 +1149,7 @@ export function initApp() {
     const target = event.target.closest('[data-action]')
     if (!target) return
     const action = target.dataset.action
-    if (TOP_LEVEL_PAGES.includes(action) || action === 'learning' || action === 'experiment' || action === 'notes' || action.startsWith('teaching-') || action === 'experiment-mode' || action === 'experiment-restart' || ['research-entry', 'research-submit', 'research-profile-submit', 'training-play-rules', 'training-play-single', 'training-play-multi', 'training-listen-question', 'training-restart'].includes(action)) resetInput()
+    if (TOP_LEVEL_PAGES.includes(action) || action === 'learning' || action === 'experiment' || action === 'notes' || action.startsWith('teaching-') || action === 'experiment-mode' || action === 'experiment-tab' || action === 'experiment-restart' || ['research-entry', 'research-submit', 'research-profile-submit', 'training-play-rules', 'training-play-single', 'training-play-multi', 'training-listen-question', 'training-restart'].includes(action)) resetInput()
     if (action === 'home') state = { ...state, page: 'home' }
     else if (action === 'learning') state = { ...state, page: 'learning', learningTab: 'teaching' }
     else if (action === 'experiment') state = { ...state, page: 'experiment', experiment: { ...state.experiment, researchMode: state.experiment.researchMode === 'formal' ? 'formal' : 'casual' } }
@@ -1163,7 +1167,7 @@ export function initApp() {
     }
     else if (action === 'speak-guide') speak('小键盘七、四、一对应盲文点一、二、三；八、五、二对应点四、五、六。零提交，星号下一方，斜杠上一方，三退格，减号清空，加号朗读，句号空格。')
     else if (action === 'learning-tab') state = { ...state, learningTab: target.dataset.tab }
-    else if (action === 'experiment-tab') { experimentToken++; reader.stop(); readerPlayToken += 1; cancelSpeech(); state = { ...state, experimentTab: target.dataset.tab } }
+    else if (action === 'experiment-tab') { experimentToken++; reader.stop(); readerPlayToken += 1; experienceReaderPlayToken += 1; activeReaderGeneration = null; experienceActiveReaderGeneration = null; cancelSpeech(); state = { ...state, experimentTab: target.dataset.tab } }
     else if (action === 'teaching-show-reference') state = { ...state, teaching: { ...state.teaching, examReferenceVisible: true } }
     else if (action === 'teaching-home') state = { ...state, teaching: { ...state.teaching, category: null, section: null, item: null, tone: null, examReferenceVisible: false } }
     else if (action === 'teaching-category') state = { ...state, teaching: { ...state.teaching, category: target.dataset.category, section: null, item: null, tone: null, examReferenceVisible: false } }
