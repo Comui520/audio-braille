@@ -61,7 +61,7 @@ export function buildTopNav(lang = 'zh') {
     { id: 'home', label: lang === 'en' ? 'Home' : '首页' },
     { id: 'learning', label: lang === 'en' ? 'Learn Braille' : '学习盲文' },
     { id: 'experiment', label: lang === 'en' ? 'AudioBraille Lab' : 'AudioBraille 实验' },
-    { id: 'reader', label: lang === 'en' ? 'Try Listening' : '体验听书' },
+    { id: 'reader', label: lang === 'en' ? 'Try Braille Listening' : '体验盲文听书' },
     { id: 'notes', label: lang === 'en' ? 'Notes' : '笔记' }
   ]
 }
@@ -76,7 +76,7 @@ export function buildHomeActions() {
   return [
     { action: 'learning', icon: '学', label: '学习盲文' },
     { action: 'experiment', icon: '听', label: 'AudioBraille 实验' },
-    { action: 'reader', icon: '书', label: '体验听书' },
+    { action: 'reader', icon: '书', label: '体验盲文听书' },
     { action: 'notes', icon: '记', label: '笔记' }
   ]
 }
@@ -106,7 +106,7 @@ export function buildExperienceReaderHtml({ books = [], chapters = [], selectedB
     cellOffset += segment.brailleCells.length
     return `<div class="reader-braille-segment" aria-label="${esc(segment.title || '材料片段')}">${html}</div>`
   }).join('')
-  return `<section class="page page-reader"><div class="page-heading"><div><p class="eyebrow">LISTENING ROOM</p><h1>体验听书</h1></div></div><p class="lead">选择一本小书和章节，对照明文与盲文，体验 AudioBraille 的逐方播放。</p><div class="reader-library-picker"><label>书籍<select id="experience-book" data-field="experience-book">${books.map(book => `<option value="${esc(book.bookId)}"${book.bookId === selectedBook?.bookId ? ' selected' : ''}>${esc(book.title)}</option>`).join('')}</select></label><label>章节<select id="experience-chapter" data-field="experience-chapter">${availableChapters.map(chapter => `<option value="${esc(chapter.chapterId)}"${chapter.chapterId === selectedChapter?.chapterId ? ' selected' : ''}>${esc(chapter.title)}</option>`).join('')}</select></label></div>${selectedChapter ? `<p class="reader-passage-meta">${esc(selectedChapter.bookTitle)} · ${esc(selectedChapter.title)} · ${cells.length} 方</p><div class="reader-comparison"><article class="reader-text-column"><h2>明文</h2>${textHtml}</article><article class="reader-braille-column"><h2>盲文对照</h2><div class="braille-playback" id="experience-braille" aria-label="盲文对照">${cellHtml}</div></article></div>` : '<p class="empty-state">暂无可用章节。</p>'}<div class="reader-controls"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-pause">暂停</button><button class="button button-quiet" data-action="reader-resume">继续</button><button class="button button-quiet" data-action="reader-stop">停止</button>${buildReaderSpeedHtml({ speed })}</div><p id="reader-progress" aria-live="polite">${esc(progressText || (completed ? '本章播放完成。' : '尚未播放'))}</p><p class="reader-casual-note">这是独立体验功能，不需要进入正式实验，也不会产生正式实验结果。</p></section>`
+  return `<section class="page page-reader"><div class="page-heading"><div><p class="eyebrow">LISTENING ROOM</p><h1>体验盲文听书</h1></div></div><p class="lead">选择一本小书和章节，对照明文与盲文，体验 AudioBraille 的逐方播放。</p><div class="reader-library-picker"><label>书籍<select id="experience-book" data-field="experience-book">${books.map(book => `<option value="${esc(book.bookId)}"${book.bookId === selectedBook?.bookId ? ' selected' : ''}>${esc(book.title)}</option>`).join('')}</select></label><label>章节<select id="experience-chapter" data-field="experience-chapter">${availableChapters.map(chapter => `<option value="${esc(chapter.chapterId)}"${chapter.chapterId === selectedChapter?.chapterId ? ' selected' : ''}>${esc(chapter.title)}</option>`).join('')}</select></label></div>${selectedChapter ? `<p class="reader-passage-meta">${esc(selectedChapter.bookTitle)} · ${esc(selectedChapter.title)} · ${cells.length} 方</p><div class="reader-comparison"><article class="reader-text-column"><h2>明文</h2>${textHtml}</article><article class="reader-braille-column"><h2>盲文对照</h2><div class="braille-playback" id="experience-braille" aria-label="盲文对照">${cellHtml}</div></article></div>` : '<p class="empty-state">暂无可用章节。</p>'}<div class="reader-controls"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-pause">暂停</button><button class="button button-quiet" data-action="reader-resume">继续</button><button class="button button-quiet" data-action="reader-stop">停止</button>${buildReaderSpeedHtml({ speed })}</div><p id="reader-progress" aria-live="polite">${esc(progressText || (completed ? '本章播放完成。' : '尚未播放'))}</p><p class="reader-casual-note">这是独立体验功能，不需要进入正式实验，也不会产生正式实验结果。</p></section>`
 }
 export function buildFormalUploadStatusHtml(status = 'idle') {
   const labels = { idle: '尚未上传', pending: '等待上传', success: '上传成功', error: '上传失败，已保存在本机' }
@@ -673,7 +673,7 @@ export function initApp() {
           <button class="button button-quiet" data-action="speak-guide">朗读说明</button>
         </div>
       </details>
-      <div class="home-actions">${buildHomeActions().map(item => `<button class="home-action" data-action="${item.action}"><span class="action-icon">${item.icon}</span><span>${item.label}</span><small>${item.action === 'experiment' ? '听觉辨识与正式听书场景' : item.action === 'reader' ? '选择章节，对照明文与盲文听一段书' : item.action === 'learning' ? '从字母、拼音到数字和符号' : '记录、导入、导出与朗读'}</small></button>`).join('')}</div>
+      <div class="home-actions">${buildHomeActions().map(item => `<button class="home-action" data-action="${item.action}"><span class="action-icon">${item.icon}</span><span>${item.label}</span><small>${item.action === 'experiment' ? '只做听觉辨识，完成后进入正式听书' : item.action === 'reader' ? '选择章节，对照明文与盲文体验听书' : item.action === 'learning' ? '从字母、拼音到数字和符号' : '记录、导入、导出与朗读'}</small></button>`).join('')}</div>
     </section>`
   }
 
@@ -748,7 +748,11 @@ export function initApp() {
         return `<section class="page page-experiment">${heading}${buildFormalCompleteHtml(state.experiment.uploadStatus)}${experimentEntryError ? `<p class="form-error" role="alert">${esc(experimentEntryError)}</p>` : ''}</section>`
       }
     }
-    return `<section class="page page-experiment">${heading}<p class="lead">测试一种通过空间音频聆听盲文的新途径。</p><div class="tabs"><button class="tab${state.experimentTab === 'recognition' ? ' is-active' : ''}" data-action="experiment-tab" data-tab="recognition">听觉辨识</button><button class="tab${state.experimentTab === 'reader' ? ' is-active' : ''}" data-action="experiment-tab" data-tab="reader">听书场景</button></div>${state.experimentTab === 'recognition' ? renderRecognition(model) : renderReader()}</section>`
+    if (state.experiment.researchMode === 'formal' && state.experiment.formalPhase === 'reader') {
+      return `<section class="page page-experiment">${heading}<p class="lead">听觉辨识已完成，下面进入正式听书的最后一节。</p>${renderReader()}</section>`
+    }
+    return `<section class="page page-experiment">${heading}<p class="lead">这里专注于通过空间音频进行听觉辨识；完成正式辨识后，听书会作为最后一节自动进入。</p>${renderRecognition(model)}`
+      + `</section>`
   }
 
   function renderRecognition(model) {
@@ -956,7 +960,7 @@ export function initApp() {
     onBackspace: () => {
       if (state.page === 'notes') {
         noteText = [...noteText].slice(0, -1).join('')
-      } else if (state.page === 'experiment' && state.experimentTab === 'reader') {
+      } else if (state.page === 'experiment' && state.experiment.formalPhase === 'reader') {
         reader.stop()
         readerPlayToken += 1
         currentReaderText = [...currentReaderText].slice(0, -1).join('')
@@ -968,7 +972,7 @@ export function initApp() {
 
   function activeEditorName() {
     if (state.page === 'notes') return 'notes'
-    if (state.page === 'experiment' && state.experimentTab === 'reader') return 'reader'
+    if (state.page === 'experiment' && state.experiment.formalPhase === 'reader') return 'reader'
     if (state.page === 'learning' && state.learningTab === 'input') return 'online'
     return null
   }
@@ -1051,7 +1055,7 @@ export function initApp() {
   function onInputCommit(cells) {
     if (state.page === 'learning' && state.learningTab === 'teaching' && state.teaching.item) {
       void commitLearning(cells)
-    } else if (state.page === 'experiment' && state.experimentTab === 'recognition' && experiment.snapshot().stage === 'training' && ['practice', 'calibration'].includes(experiment.snapshot().trainingStep)) {
+    } else if (state.page === 'experiment' && state.experiment.formalPhase !== 'reader' && experiment.snapshot().stage === 'training' && ['practice', 'calibration'].includes(experiment.snapshot().trainingStep)) {
       const before = experiment.snapshot()
       const trials = before.trainingStep === 'practice' ? before.trainingPracticeTrials : before.trainingCalibrationTrials
       const trial = trials[before.trainingQuestionIndex]
@@ -1078,7 +1082,7 @@ export function initApp() {
         }
       }
       render()
-    } else if (state.page === 'experiment' && state.experimentTab === 'recognition' && experiment.snapshot().stage === 'answer') {
+    } else if (state.page === 'experiment' && state.experiment.formalPhase !== 'reader' && experiment.snapshot().stage === 'answer') {
       const result = experiment.submit(cells)
       if (state.experiment.researchMode === 'formal') {
         const savePromise = persistRecognitionRecord(result.record)
@@ -1093,7 +1097,7 @@ export function initApp() {
       speak(result.correct ? '正确' : `错误，正确答案是 ${experiment.snapshot().trials[experiment.snapshot().index - 1]?.label || ''}`)
     } else if (state.page === 'learning' && state.learningTab === 'input') {
       inputOutput += cellsToUnicode(cells)
-    } else if (state.page === 'experiment' && state.experimentTab === 'reader') {
+    } else if (state.page === 'experiment' && state.experiment.formalPhase === 'reader') {
       currentReaderText = appendCommittedBraille(currentReaderText, cells)
     } else if (state.page === 'notes') {
       const textarea = document.querySelector('#note-textarea')
@@ -1167,7 +1171,7 @@ export function initApp() {
     }
     else if (action === 'speak-guide') speak('小键盘七、四、一对应盲文点一、二、三；八、五、二对应点四、五、六。零提交，星号下一方，斜杠上一方，三退格，减号清空，加号朗读，句号空格。')
     else if (action === 'learning-tab') state = { ...state, learningTab: target.dataset.tab }
-    else if (action === 'experiment-tab') { experimentToken++; reader.stop(); readerPlayToken += 1; experienceReaderPlayToken += 1; activeReaderGeneration = null; experienceActiveReaderGeneration = null; cancelSpeech(); state = { ...state, experimentTab: target.dataset.tab } }
+    else if (action === 'experiment-tab') { experimentToken++; reader.stop(); readerPlayToken += 1; experienceReaderPlayToken += 1; activeReaderGeneration = null; experienceActiveReaderGeneration = null; cancelSpeech(); state = { ...state, experimentTab: 'recognition' } }
     else if (action === 'teaching-show-reference') state = { ...state, teaching: { ...state.teaching, examReferenceVisible: true } }
     else if (action === 'teaching-home') state = { ...state, teaching: { ...state.teaching, category: null, section: null, item: null, tone: null, examReferenceVisible: false } }
     else if (action === 'teaching-category') state = { ...state, teaching: { ...state.teaching, category: target.dataset.category, section: null, item: null, tone: null, examReferenceVisible: false } }
@@ -1282,12 +1286,12 @@ export function initApp() {
         experimentEntryError = '正式辨识记录尚未可靠保存，暂不能进入听书。'
       } else if (state.experiment.researchMode === 'formal' && formalRecognitionIndex === formalRecognitionModes.length - 1 && state.experiment.formalRecognitionModesCompleted.length === formalRecognitionModes.length) {
         state = completeRecognition(state, formalRecognitionModes)
-        state = { ...state, experimentTab: 'reader', input: { confirmedCells: [], currentDots: [] } }
+        state = { ...state, experimentTab: 'recognition', input: { confirmedCells: [], currentDots: [] } }
       }
     }
     else if (action === 'reader-play') {
       const scope = readerScopeForState(state)
-      if (state.experiment.researchMode === 'formal' && scope !== 'formal') return
+      if (state.page === 'experiment' && state.experiment.researchMode === 'formal' && scope !== 'formal') return
       const formalReader = scope === 'formal'
       if (formalReader) {
         readerCompleted = false
@@ -1434,7 +1438,7 @@ export function initApp() {
     const accepted = ['0', '*', '/', '3', '-', '+', '.']
     if (!accepted.includes(event.key)) return
     event.preventDefault()
-    const experimentState = state.page === 'experiment' && state.experimentTab === 'recognition' ? experiment.snapshot() : null
+    const experimentState = state.page === 'experiment' && state.experiment.formalPhase !== 'reader' ? experiment.snapshot() : null
     if (event.key === '0' && experimentState?.stage === 'listen') {
       const trial = experimentState.trials[experimentState.index]
       if (trial) void playCells(trial.cells)

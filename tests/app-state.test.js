@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   TOP_LEVEL_PAGES,
+  EXPERIMENT_TABS,
   createAppState,
   navigate,
   selectLearningTab,
@@ -21,6 +22,7 @@ describe('v9 app state', () => {
     expect(state.page).toBe('home')
     expect(state.learningTab).toBe('teaching')
     expect(state.experimentTab).toBe('recognition')
+    expect(EXPERIMENT_TABS).toEqual(['recognition'])
   })
 
   it('导航只接受有效页面', () => {
@@ -28,15 +30,14 @@ describe('v9 app state', () => {
     expect(navigate(createAppState(), 'reader').page).toBe('reader')
   })
 
-  it('标签切换不改变顶层页面', () => {
+  it('AudioBraille 实验只保留听觉辨识，正式听书不作为实验标签出现', () => {
     const state = navigate(createAppState(), 'experiment')
-    const experimentState = selectExperimentTab(state, 'reader')
-    expect(experimentState).toMatchObject({ page: 'experiment', experimentTab: 'reader' })
-    expect(selectLearningTab(experimentState, 'input')).toMatchObject({
-      page: 'experiment', experimentTab: 'reader', learningTab: 'input'
+    expect(selectExperimentTab(state, 'reader')).toEqual(state)
+    expect(selectExperimentTab(state, 'recognition')).toMatchObject({ page: 'experiment', experimentTab: 'recognition' })
+    expect(selectLearningTab(state, 'input')).toMatchObject({
+      page: 'experiment', experimentTab: 'recognition', learningTab: 'input'
     })
   })
-
   it('正式实验必须按 consent → profile → training → recognition → reader → complete 前进', () => {
     const initial = createAppState()
     const consent = beginFormalExperiment(initial)

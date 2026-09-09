@@ -31,12 +31,14 @@ describe('v12 应用壳', () => {
     expect(shouldHandleGateKey({ key: '0', ctrlKey: true })).toBe(false)
     expect(shouldHandleGateKey({ key: 'a', altKey: true })).toBe(false)
   })
-  it('顶层导航包含独立体验听书入口', () => {
+  it('顶层导航包含明确的独立体验盲文听书入口', () => {
     expect(buildTopNav().map(item => item.id)).toEqual(['home', 'learning', 'experiment', 'reader', 'notes'])
+    expect(buildTopNav().find(item => item.id === 'reader').label).toBe('体验盲文听书')
   })
 
-  it('首页入口包含独立体验听书', () => {
+  it('首页入口包含独立体验盲文听书', () => {
     expect(buildHomeActions().map(item => item.action)).toEqual(['learning', 'experiment', 'reader', 'notes'])
+    expect(buildHomeActions().find(item => item.action === 'reader').label).toBe('体验盲文听书')
   })
 
   it('笔记文档视图只生成 textarea，不生成自定义文档方块', () => {
@@ -63,7 +65,7 @@ describe('v12 应用壳', () => {
       selectedBookId: 'b1',
       selectedChapterId: 'c1', activeCellIndex: 1
     })
-    expect(html).toContain('体验听书')
+    expect(html).toContain('体验盲文听书')
     expect(html).toContain('experience-book')
     expect(html).toContain('experience-chapter')
     expect(html).toContain('明文')
