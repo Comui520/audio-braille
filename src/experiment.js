@@ -190,6 +190,7 @@ export function createExperimentModel({
   let calibrationAttempts = 0
   let qualityFlags = []
   let trainingStep = 'idle'
+  let trainingStepPlayed = false
   let trainingQuestionIndex = 0
   let trainingQuestionStarted = false
   let trainingQuestionStartedAt = null
@@ -229,6 +230,7 @@ export function createExperimentModel({
       calibrationAttempts,
       qualityFlags: [...qualityFlags],
       trainingStep,
+      trainingStepPlayed,
       trainingQuestionIndex,
       trainingQuestionStarted,
       trainingQuestionStartedAt,
@@ -293,6 +295,7 @@ export function createExperimentModel({
       qualityFlags = []
     }
     trainingStep = 'rules'
+    trainingStepPlayed = false
     trainingQuestionIndex = 0
     trainingQuestionStarted = false
     trainingQuestionStartedAt = null
@@ -302,11 +305,18 @@ export function createExperimentModel({
     return snapshot()
   }
 
-  function advanceTrainingStep() {
+  function markTrainingStepPlayed() {
     if (stage !== 'training') return snapshot()
+    trainingStepPlayed = true
+    return snapshot()
+  }
+
+  function advanceTrainingStep() {
+    if (stage !== 'training' || !trainingStepPlayed) return snapshot()
     const index = TRAINING_STEPS.indexOf(trainingStep)
     if (index < 0 || index >= TRAINING_STEPS.length - 1) return snapshot()
     trainingStep = TRAINING_STEPS[index + 1]
+    trainingStepPlayed = false
     trainingQuestionIndex = 0
     trainingQuestionStarted = false
     trainingQuestionStartedAt = null
@@ -454,7 +464,7 @@ export function createExperimentModel({
   }
 
   return {
-    snapshot, selectMode, start, startTraining, advanceTrainingStep, startTrainingQuestion, submitTrainingAnswer, completeCalibration, replay,
+    snapshot, selectMode, start, startTraining, markTrainingStepPlayed, advanceTrainingStep, startTrainingQuestion, submitTrainingAnswer, completeCalibration, replay,
     confirmShowcase, listen, submit, restart
   }
 }

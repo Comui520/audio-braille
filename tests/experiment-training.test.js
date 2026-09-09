@@ -20,16 +20,24 @@ describe('正式实验统一训练和校准', () => {
 
     const model = createExperimentModel({ dataClass: 'formal', consentAccepted: true, participantId: 'p1', sessionId: 's1' })
     expect(model.startTraining().trainingStep).toBe('rules')
+    expect(model.advanceTrainingStep().trainingStep).toBe('rules')
+    expect(model.markTrainingStepPlayed().trainingStep).toBe('rules')
     expect(model.advanceTrainingStep().trainingStep).toBe('single-points')
+    expect(model.advanceTrainingStep().trainingStep).toBe('single-points')
+    expect(model.markTrainingStepPlayed().trainingStep).toBe('single-points')
     expect(model.advanceTrainingStep().trainingStep).toBe('multi-examples')
+    expect(model.markTrainingStepPlayed().trainingStep).toBe('multi-examples')
     expect(model.advanceTrainingStep().trainingStep).toBe('practice')
   })
 
   it('练习和校准题必须先播放，校准按固定答案自动判定', () => {
     const model = createExperimentModel({ dataClass: 'formal', consentAccepted: true, participantId: 'p1', sessionId: 's1' })
     model.startTraining()
+    model.markTrainingStepPlayed()
     model.advanceTrainingStep()
+    model.markTrainingStepPlayed()
     model.advanceTrainingStep()
+    model.markTrainingStepPlayed()
     model.advanceTrainingStep()
 
     expect(model.submitTrainingAnswer(TRAINING_CALIBRATION_TRIALS[0].cells).reason).toBe('training-question-not-played')
@@ -66,8 +74,11 @@ describe('正式实验统一训练和校准', () => {
       sessionId: 's1'
     })
     model.startTraining()
+    model.markTrainingStepPlayed()
     model.advanceTrainingStep()
+    model.markTrainingStepPlayed()
     model.advanceTrainingStep()
+    model.markTrainingStepPlayed()
     model.advanceTrainingStep()
     model.startTrainingQuestion()
 

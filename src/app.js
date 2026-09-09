@@ -1047,6 +1047,7 @@ export function initApp() {
       if (result.reason) {
         trainingFeedback = result.reason === 'training-question-not-played' ? '请先播放本题，再输入盲文。' : '当前还不能提交。'
       } else {
+        resetInput()
         trainingFeedback = result.correct ? '正确。' : '这道训练题不正确，请继续下一题。'
         if (result.finished) {
           state = completeTraining(state, { passed: result.passed })
@@ -1135,7 +1136,7 @@ export function initApp() {
     const target = event.target.closest('[data-action]')
     if (!target) return
     const action = target.dataset.action
-    if (TOP_LEVEL_PAGES.includes(action) || action === 'learning' || action === 'experiment' || action === 'notes' || action.startsWith('teaching-') || action === 'experiment-mode' || action === 'experiment-restart') resetInput()
+    if (TOP_LEVEL_PAGES.includes(action) || action === 'learning' || action === 'experiment' || action === 'notes' || action.startsWith('teaching-') || action === 'experiment-mode' || action === 'experiment-restart' || ['research-entry', 'research-submit', 'research-profile-submit', 'training-play-rules', 'training-play-single', 'training-play-multi', 'training-listen-question', 'training-restart'].includes(action)) resetInput()
     if (action === 'home') state = { ...state, page: 'home' }
     else if (action === 'learning') state = { ...state, page: 'learning', learningTab: 'teaching' }
     else if (action === 'experiment') state = { ...state, page: 'experiment', experiment: { ...state.experiment, researchMode: state.experiment.researchMode === 'formal' ? 'formal' : 'casual' } }
@@ -1196,7 +1197,7 @@ export function initApp() {
       try {
         await speakAndWait(buildTrainingRuleText(getLang()))
         const current = experiment.snapshot()
-        if (current.stage === 'training' && current.trainingStep === 'rules') experiment.advanceTrainingStep()
+        if (current.stage === 'training' && current.trainingStep === 'rules') { experiment.markTrainingStepPlayed(); experiment.advanceTrainingStep() }
       } finally {
         trainingPlaybackBusy = false
         render()
@@ -1212,7 +1213,7 @@ export function initApp() {
         const completed = await playTrainingExamples(examples, 0.55, '#training-showcase-braille')
         const step = action === 'training-play-single' ? 'single-points' : 'multi-examples'
         const current = experiment.snapshot()
-        if (completed && current.stage === 'training' && current.trainingStep === step) experiment.advanceTrainingStep()
+        if (completed && current.stage === 'training' && current.trainingStep === step) { experiment.markTrainingStepPlayed(); experiment.advanceTrainingStep() }
       } finally {
         trainingPlaybackBusy = false
         render()
