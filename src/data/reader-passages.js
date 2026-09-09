@@ -131,6 +131,12 @@ export const EXPERIENCE_CHAPTERS = EXPERIENCE_CHAPTER_SPECS.flatMap(book => book
     bookId: book.bookId,
     bookTitle: book.title,
     title: spec.title,
+    segments: passages.map(passage => ({
+      passageId: passage.passageId,
+      title: passage.title,
+      text: passage.text,
+      brailleCells: passage.brailleCells.map(cell => [...cell])
+    })),
     text: passages.map(passage => passage.text).join(' '),
     brailleCells: passages.flatMap(passage => passage.brailleCells.map(cell => [...cell]))
   }

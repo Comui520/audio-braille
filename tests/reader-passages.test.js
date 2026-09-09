@@ -32,7 +32,12 @@ describe('听书材料库', () => {
     expect(passage?.pinyin).toContain('lian2')
     expect(passage?.pinyin).not.toContain('lian4')
   })
-  it('体验听书提供多本书和较长章节，章节明文与盲文方序列一一对应', () => {
+  it('体验听书提供多本书和较长章节，章节明文与盲文按材料片段对应', () => {
+    expect(EXPERIENCE_CHAPTERS.every(item => Array.isArray(item.segments) && item.segments.length > 0 && item.segments.every(segment => segment.text && segment.brailleCells.length > 0))).toBe(true)
+    for (const chapter of EXPERIENCE_CHAPTERS) {
+      expect(chapter.text).toBe(chapter.segments.map(segment => segment.text).join(' '))
+      expect(chapter.brailleCells).toEqual(chapter.segments.flatMap(segment => segment.brailleCells))
+    }
     expect(EXPERIENCE_BOOKS.length).toBeGreaterThanOrEqual(3)
     expect(EXPERIENCE_CHAPTERS.length).toBeGreaterThanOrEqual(6)
     expect(new Set(EXPERIENCE_CHAPTERS.map(item => item.chapterId)).size).toBe(EXPERIENCE_CHAPTERS.length)
