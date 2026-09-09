@@ -81,12 +81,12 @@ export function buildReaderSpeedHtml({ formal = false, speed = 1 } = {}) {
   return `<label class="range-label">速度 <input id="reader-speed" type="range" min="0.5" max="5" step="0.5" value="${speed}"><output>${speed}x</output></label>`
 }
 
-export function buildExperienceReaderHtml({ books = [], chapters = [], selectedBookId = '', selectedChapterId = '', speed = 1, completed = false, progressText = '' } = {}) {
+export function buildExperienceReaderHtml({ books = [], chapters = [], selectedBookId = '', selectedChapterId = '', speed = 1, completed = false, progressText = '', activeCellIndex = null } = {}) {
   const selectedBook = books.find(book => book.bookId === selectedBookId) || books[0]
   const selectedChapter = chapters.find(chapter => chapter.chapterId === selectedChapterId) || chapters.find(chapter => chapter.bookId === selectedBook?.bookId) || chapters[0]
   const availableChapters = chapters.filter(chapter => chapter.bookId === selectedBook?.bookId)
   const cells = selectedChapter?.brailleCells || []
-  const cellHtml = cells.map((cell, index) => `<span class="braille-playback-cell" data-cell-index="${index}" aria-label="盲文第 ${index + 1} 方">${esc(dotsToUnicode(cell))}</span>`).join('')
+  const cellHtml = cells.map((cell, index) => `<span class="braille-playback-cell${index === activeCellIndex ? ' is-playing' : ''}" data-cell-index="${index}" aria-label="盲文第 ${index + 1} 方">${esc(dotsToUnicode(cell))}</span>`).join('')
   return `<section class="page page-reader"><div class="page-heading"><div><p class="eyebrow">LISTENING ROOM</p><h1>体验听书</h1></div></div><p class="lead">选择一本小书和章节，对照明文与盲文，体验 AudioBraille 的逐方播放。</p><div class="reader-library-picker"><label>书籍<select id="experience-book" data-field="experience-book">${books.map(book => `<option value="${esc(book.bookId)}"${book.bookId === selectedBook?.bookId ? ' selected' : ''}>${esc(book.title)}</option>`).join('')}</select></label><label>章节<select id="experience-chapter" data-field="experience-chapter">${availableChapters.map(chapter => `<option value="${esc(chapter.chapterId)}"${chapter.chapterId === selectedChapter?.chapterId ? ' selected' : ''}>${esc(chapter.title)}</option>`).join('')}</select></label></div>${selectedChapter ? `<p class="reader-passage-meta">${esc(selectedChapter.bookTitle)} · ${esc(selectedChapter.title)} · ${cells.length} 方</p><div class="reader-comparison"><article class="reader-text-column"><h2>明文</h2><p>${esc(selectedChapter.text)}</p></article><article class="reader-braille-column"><h2>盲文对照</h2><div class="braille-playback" id="experience-braille" aria-label="盲文对照">${cellHtml}</div></article></div>` : '<p class="empty-state">暂无可用章节。</p>'}<div class="reader-controls"><button class="button button-primary" data-action="reader-play">播放 AudioBraille</button><button class="button button-quiet" data-action="reader-pause">暂停</button><button class="button button-quiet" data-action="reader-resume">继续</button><button class="button button-quiet" data-action="reader-stop">停止</button>${buildReaderSpeedHtml({ speed })}</div><p id="reader-progress" aria-live="polite">${esc(progressText || (completed ? '本章播放完成。' : '尚未播放'))}</p><p class="reader-casual-note">这是独立体验功能，不需要进入正式实验，也不会产生正式实验结果。</p></section>`
 }
 
@@ -256,6 +256,8 @@ export function buildFormalTrainingHtml(model = {}) {
   const inputConfirmedCells = model.inputConfirmedCells || []
   const inputCurrentDots = model.inputCurrentDots || []
   const inputCursorIndex = model.inputCursorIndex ?? 0
+  const trainingExamples = step === 'single-points' ? TRAINING_SINGLE_POINTS.map(dots => [dots]) : step === 'multi-examples' ? TRAINING_MULTI_EXAMPLES.flat() : []
+  const trainingExample = trainingExamples.length ? `<div class="training-showcase"><h3>本阶段盲文示例</h3><div id="training-showcase-braille" class="braille-playback" aria-label="训练盲文示例">${diagramHtml(trainingExamples)}</div></div>` : ''
   const trainingInput = step === 'rules' || step === 'complete' ? '' : `<div class="training-input-panel"><h3>训练输入</h3>${inputDisplayHtml(inputConfirmedCells, inputCurrentDots, inputCursorIndex, '训练输入盲文点位')}<p class="training-input-note">${step === 'single-points' || step === 'multi-examples' ? '可以跟着声音试着输入；本阶段仅用于熟悉操作，不计分。' : model.trainingQuestionStarted ? '已播放本题，可以输入听到的盲文方，按 0 提交。' : '请先播放本题，播放完成后才能输入并提交。'}</p></div>`
   let body = ''
   if (step === 'complete') {
@@ -277,7 +279,7 @@ export function buildFormalTrainingHtml(model = {}) {
     const played = model.trainingQuestionStarted === true
     body = `<p>固定校准题用于确认你是否已经掌握 AudioBraille 编码。答对至少 ${CALIBRATION_PASS_SCORE} / ${trials.length} 题才可进入正式辨识。</p><p><strong>校准题 ${Math.min((model.trainingQuestionIndex || 0) + 1, trials.length)} / ${trials.length}</strong></p><button class="button button-primary" data-action="training-listen-question" ${played || !trial ? 'disabled' : ''}>${played ? '已播放，请输入' : '播放本题'}</button><div class="input-preview" id="training-input-preview">${played ? '请用小键盘输入盲文，按 0 提交。' : '请先播放本题。'}</div>`
   }
-  return `<section class="experiment-status training-panel"><h2>统一训练和校准</h2><p>训练数据只用于训练质量记录，不计入正式辨识结果。</p>${progress}${model.feedback ? `<p class="training-feedback" role="status">${esc(model.feedback)}</p>` : ''}<div class="training-step-content">${body}${trainingInput}</div></section>`
+  return `<section class="experiment-status training-panel"><h2>统一训练和校准</h2><p>训练数据只用于训练质量记录，不计入正式辨识结果。</p>${progress}${model.feedback ? `<p class="training-feedback" role="status">${esc(model.feedback)}</p>` : ''}<div class="training-step-content">${body}${trainingExample}${trainingInput}</div></section>`
 }
 
 export function appendCommittedBraille(existing, cells) {
@@ -302,9 +304,9 @@ function pointsText(cells) {
 }
 
 function diagramHtml(cells) {
-  return `<span class="braille-diagram" aria-label="盲文 ${esc(cellsToUnicode(cells))}">${cellsToDiagram(cells).map(cell => {
+  return `<span class="braille-diagram" aria-label="盲文 ${esc(cellsToUnicode(cells))}">${cellsToDiagram(cells).map((cell, cellIndex) => {
     const order = [0, 3, 1, 4, 2, 5]
-    return `<span class="braille-cell">${order.map(index => `<i class="braille-dot${cell.dots[index] ? ' is-on' : ''}"></i>`).join('')}</span>`
+    return `<span class="braille-cell" data-cell-index="${cellIndex}">${order.map(index => `<i class="braille-dot${cell.dots[index] ? ' is-on' : ''}"></i>`).join('')}</span>`
   }).join('')}</span>`
 }
 
@@ -341,7 +343,9 @@ export function initApp() {
     setDocument: (cells, fallbackText = '') => {
       if (Array.isArray(cells)) editorControllers.notes.setDocument(cells, cells.length)
       else loadEditorText('notes', fallbackText)
-    }
+    },
+    onPlaybackCellStart: index => setPlaybackHighlight('#note-reference', index),
+    onPlaybackCellComplete: () => clearPlaybackHighlight('#note-reference')
   })
   let selectedReaderPassage = READER_PASSAGES[0]
   let readerPassages = READER_PASSAGES
@@ -372,7 +376,7 @@ export function initApp() {
       playbackSpeed: reader.getSpeed()
     })
     render()
-  } })
+  }, onCellStart: (index) => { if (state.page === 'reader') setPlaybackHighlight('#experience-braille', index) }, onCellComplete: () => { if (state.page === 'reader') clearPlaybackHighlight('#experience-braille') } })
   let experiment = createExperimentModel({ trialCount: 10 })
   let noteText = ''
   let inputOutput = ''
@@ -846,12 +850,31 @@ export function initApp() {
     })
   }
 
-  async function playCells(cells) {
+  function setPlaybackHighlight(selector, index) {
+    document.querySelectorAll('.is-playing').forEach(element => element.classList.remove('is-playing'))
+    if (selector == null || index == null) return
+    const element = document.querySelector(selector + ' [data-cell-index="' + index + '"]')
+    element?.classList.add('is-playing')
+  }
+
+  function clearPlaybackHighlight(selector = null) {
+    const elements = selector ? document.querySelectorAll(selector + ' .is-playing') : document.querySelectorAll('.is-playing')
+    elements.forEach(element => element.classList.remove('is-playing'))
+  }
+
+  async function playCells(cells, targetSelector = null) {
     const token = ++experimentToken
-    for (const cell of buildCellSequence(cells)) {
-      if (token !== experimentToken) return
-      await playAudioBraille(cell, { duration: 0.35 })
-      await new Promise(resolve => setTimeout(resolve, 120))
+    try {
+      for (const [index, cell] of buildCellSequence(cells).entries()) {
+        if (token !== experimentToken) return false
+        setPlaybackHighlight(targetSelector, index)
+        await playAudioBraille(cell, { duration: 0.35 })
+        if (token !== experimentToken) return false
+        await new Promise(resolve => setTimeout(resolve, 120))
+      }
+      return true
+    } finally {
+      if (token === experimentToken) clearPlaybackHighlight(targetSelector)
     }
   }
 
@@ -1099,7 +1122,7 @@ export function initApp() {
       const section = getTeachingSections(state.teaching.category).find(value => value.id === state.teaching.section)
       const index = section.items.indexOf(state.teaching.item) + (action === 'teaching-prev' ? -1 : 1)
       if (section.items[index]) state = { ...state, teaching: { ...state.teaching, item: section.items[index], tone: null, examReferenceVisible: false }, input: { confirmedCells: [], currentDots: [] } }
-    } else if (action === 'play-item') { const item = getTeachingItem(state.teaching.category, state.teaching.section, state.teaching.item, getLang(), state.teaching.tone); if (item) { cancelSpeech(); const playback = buildLearningPlayback(item); void playCells(playback.cells) } }
+    } else if (action === 'play-item') { const item = getTeachingItem(state.teaching.category, state.teaching.section, state.teaching.item, getLang(), state.teaching.tone); if (item) { cancelSpeech(); const playback = buildLearningPlayback(item); void playCells(playback.cells, '.lesson-braille') } }
     else if (action === 'mark-learned') {
       const section = getTeachingSections(state.teaching.category).find(value => value.id === state.teaching.section)
       const old = sectionProgress(state.teaching.category, state.teaching.section)
@@ -1137,7 +1160,7 @@ export function initApp() {
       trainingFeedback = ''
       try {
         const examples = action === 'training-play-single' ? TRAINING_SINGLE_POINTS.map(dots => [dots]) : TRAINING_MULTI_EXAMPLES
-        const completed = await playTrainingExamples(examples)
+        const completed = await playTrainingExamples(examples, 0.55, '#training-showcase-braille')
         const step = action === 'training-play-single' ? 'single-points' : 'multi-examples'
         const current = experiment.snapshot()
         if (completed && current.stage === 'training' && current.trainingStep === step) experiment.advanceTrainingStep()
@@ -1220,7 +1243,7 @@ export function initApp() {
       activeReaderGeneration = reader.snapshot().generation
       void playPromise.then(() => { if (playToken !== readerPlayToken) readerCompleted = false })
     }
-    else if (action === 'reader-stop') { activeReaderGeneration = null; reader.stop(); readerPlayToken += 1; readerCompleted = false; readerTrialRecord = null }
+    else if (action === 'reader-stop') { activeReaderGeneration = null; reader.stop(); readerPlayToken += 1; readerCompleted = false; readerTrialRecord = null; clearPlaybackHighlight() }
     else if (action === 'reader-pause') reader.pause()
     else if (action === 'reader-resume') reader.resume()
     else if (action === 'reader-understood') {
@@ -1253,23 +1276,30 @@ export function initApp() {
     else if (action === 'notes-export') void notes.exportNote('json')
     else if (action === 'notes-import') document.querySelector('#note-import-file')?.click()
     else if (action === 'notes-new') { notes.newNote(); loadEditorText('notes', '') }
-    else if (TOP_LEVEL_PAGES.includes(action)) { experimentToken++; reader.stop(); readerPlayToken += 1; cancelSpeech(); state = { ...state, page: action, input: { confirmedCells: [], currentDots: [] } } }
+    else if (TOP_LEVEL_PAGES.includes(action)) { experimentToken++; reader.stop(); readerPlayToken += 1; cancelSpeech(); clearPlaybackHighlight(); state = { ...state, page: action, input: { confirmedCells: [], currentDots: [] } } }
     render()
   }
 
-  async function playTrainingExamples(examples, duration = 0.55) {
+  async function playTrainingExamples(examples, duration = 0.55, targetSelector = null) {
     const token = ++experimentToken
-    for (const cells of examples) {
-      if (token !== experimentToken) return false
-      for (const cell of buildCellSequence(cells)) {
+    let playbackIndex = 0
+    try {
+      for (const cells of examples) {
         if (token !== experimentToken) return false
-        await playAudioBraille(cell, { duration })
-        await new Promise(resolve => setTimeout(resolve, 180))
+        for (const cell of buildCellSequence(cells)) {
+          if (token !== experimentToken) return false
+          setPlaybackHighlight(targetSelector, playbackIndex)
+          await playAudioBraille(cell, { duration })
+          if (token !== experimentToken) return false
+          await new Promise(resolve => setTimeout(resolve, 180))
+          playbackIndex += 1
+        }
       }
+      return true
+    } finally {
+      if (token === experimentToken) clearPlaybackHighlight(targetSelector)
     }
-    return token === experimentToken
   }
-
   async function playShowcase() {
     const token = ++experimentToken
     // 只播报一次总说明；逐点阶段不再调用 TTS，避免浏览器语音与下一项重叠。

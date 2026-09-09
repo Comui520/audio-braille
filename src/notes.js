@@ -74,7 +74,7 @@ export function buildNotePlaybackCells(text) {
 // —— 笔记 UI（由 app.js 调用）——
 // textarea + 快捷键：Ctrl+S 保存、Ctrl+O 历史、Ctrl+N 新建
 // 回放：+ 键朗读明文 + playAudioBraille 逐方演奏（每方间隔 0.3s）
-export function initNotes({ state, storage, render, getDocumentCells = null, setDocument = null } = {}) {
+export function initNotes({ state, storage, render, getDocumentCells = null, setDocument = null, onPlaybackCellStart = null, onPlaybackCellComplete = null } = {}) {
   let current = { id: null, title: '', plain: '', dotsSeq: [] }
   return {
     view() {
@@ -107,18 +107,18 @@ export function initNotes({ state, storage, render, getDocumentCells = null, set
         // 英文：逐方字母卡片
         const refs = buildPlainReference(dotsSeq)
         refEl.innerHTML = `<strong>${t('plainLabel')}：</strong>` +
-          refs.map(r => r.char
-            ? `<span class="ref-char">${r.char}</span>`
-            : `<span class="ref-char ref-unknown">${r.unicode}</span>`).join(' ')
+          refs.map((r, index) => r.char
+            ? `<span class="ref-char" data-cell-index="${index}">${r.char}</span>`
+            : `<span class="ref-char ref-unknown" data-cell-index="${index}">${r.unicode}</span>`).join(' ')
       } else {
         // 中文：带调拼音串 + 逐方字母对照
         const pinyin = buildPinyinReference(dotsSeq)
         const refs = buildPlainReference(dotsSeq)
         refEl.innerHTML = `<strong>${t('pinyinLabel')}：</strong><span class="ref-pinyin">${pinyin}</span>` +
           `<br><strong>${t('plainLabel')}：</strong>` +
-          refs.map(r => r.char
-            ? `<span class="ref-char">${r.char}</span>`
-            : `<span class="ref-char ref-unknown">${r.unicode}</span>`).join(' ')
+          refs.map((r, index) => r.char
+            ? `<span class="ref-char" data-cell-index="${index}">${r.char}</span>`
+            : `<span class="ref-char ref-unknown" data-cell-index="${index}">${r.unicode}</span>`).join(' ')
       }
     },
     async save() {
@@ -218,8 +218,10 @@ export function initNotes({ state, storage, render, getDocumentCells = null, set
       const dotsSeq = buildNotePlaybackCells(text)
       if (dotsSeq.length === 0) { speak(t('notesEmpty')); return }
       const { playAudioBraille } = await import('./audio-braille.js')
-      for (const dots of buildPlaybackSequence(dotsSeq)) {
+      for (const [index, dots] of buildPlaybackSequence(dotsSeq).entries()) {
+        onPlaybackCellStart?.(index, dots)
         await playAudioBraille(dots, { duration: 0.2 })
+        onPlaybackCellComplete?.(index, dots)
         await new Promise(r => setTimeout(r, 300))
       }
     },
@@ -236,8 +238,10 @@ export function initNotes({ state, storage, render, getDocumentCells = null, set
       // AudioBraille 直接读：速度可调（越快每方越短）
       const { playAudioBraille } = await import('./audio-braille.js')
       const sp = Math.min(5, Math.max(0.5, Number(speed) || 1))
-      for (const dots of dotsSeq) {
+      for (const [index, dots] of dotsSeq.entries()) {
+        onPlaybackCellStart?.(index, dots)
         await playAudioBraille(dots, { duration: Math.max(0.05, 0.4 / sp) })
+        onPlaybackCellComplete?.(index, dots)
         await new Promise(r => setTimeout(r, 120 / sp))
       }
     }

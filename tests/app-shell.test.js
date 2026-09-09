@@ -47,7 +47,7 @@ describe('v12 应用壳', () => {
       books: [{ bookId: 'b1', title: '一本书', chapters: [{ chapterId: 'c1', title: '第一章' }] }],
       chapters: [{ chapterId: 'c1', bookId: 'b1', title: '第一章', text: '明文', brailleCells: [[1], [1, 2]] }],
       selectedBookId: 'b1',
-      selectedChapterId: 'c1'
+      selectedChapterId: 'c1', activeCellIndex: 1
     })
     expect(html).toContain('体验听书')
     expect(html).toContain('experience-book')
@@ -56,6 +56,7 @@ describe('v12 应用壳', () => {
     expect(html).toContain('盲文')
     expect(html).toContain('reader-play')
     expect(html).toContain('data-cell-index="0"')
+    expect(html).toContain('braille-playback-cell is-playing')
   })
   it('正式听书固定 1 倍速，试玩听书保留倍速控制', () => {
     expect(buildReaderSpeedHtml({ formal: true, speed: 3 })).toContain('正式实验固定 1x')
@@ -115,4 +116,3 @@ describe('v12 应用壳', () => {
     })
   })
 })
-

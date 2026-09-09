@@ -99,7 +99,7 @@ export function clampSpeed(x) {
 }
 
 // 朗读控制器
-export function createReader({ onTick = null, onComplete = null } = {}) {
+export function createReader({ onTick = null, onComplete = null, onCellStart = null, onCellComplete = null } = {}) {
   let speed = 1
   let playing = false
   let paused = false
@@ -131,8 +131,10 @@ export function createReader({ onTick = null, onComplete = null } = {}) {
         if (paused) await new Promise(resolve => resumeWaiters.push(resolve))
         if (token !== generation) return
         const dur = Math.max(0.05, 0.5 / speed)
+        onCellStart?.(i, [...seq[i]])
         await playAudioBraille(seq[i], { duration: dur })
         if (token !== generation) return
+        onCellComplete?.(i, [...seq[i]])
         position = i + 1
         onTick?.(position, total)
         await new Promise(resolve => setTimeout(resolve, 100 / speed))

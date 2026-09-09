@@ -33,6 +33,15 @@ describe('v9 reader lifecycle', () => {
     await reader.play([[1]])
     expect(completion).toMatchObject({ generation: expect.any(Number) })
   })
+  it('逐方播放回调提供稳定的方索引，并在完成后清理当前方', async () => {
+    const starts = []
+    const ends = []
+    const reader = createReader({ onCellStart: (index, cell) => starts.push([index, cell]), onCellComplete: index => ends.push(index) })
+    await reader.play([[1], [2, 3]])
+    expect(starts.map(item => item[0])).toEqual([0, 1])
+    expect(starts[1][1]).toEqual([2, 3])
+    expect(ends).toEqual([0, 1])
+  })
   it('停止播放不会触发完成回调，暂停会累计次数', async () => {
     let completed = 0
     const reader = createReader({ onComplete: () => { completed += 1 } })

@@ -229,3 +229,5 @@ kbd { display: inline-block; min-width: 1.7em; padding: .12em .35em; border: 1px
 .reader-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: 1rem 0; }
 .reader-casual-note { color: var(--text-muted); font-size: .92rem; }
 @media (max-width: 700px) { .reader-comparison, .reader-library-picker { grid-template-columns: 1fr; } .braille-playback { max-height: 14rem; } }
+.braille-cell.is-playing { border-color: var(--brand); background: #dbe6ff; box-shadow: 0 0 0 3px #b7ccff; }
+.ref-char.is-playing { display: inline-block; border-radius: .3rem; background: #dbe6ff; box-shadow: 0 0 0 2px #b7ccff; }
