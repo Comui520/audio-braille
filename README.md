@@ -164,14 +164,32 @@ npm run preview
 3. 构建命令：`npm run build`；
 4. 输出目录：`dist`。
 
-普通网站功能不需要 Supabase。只有在要把正式实验数据上传到服务器时，才需要在 Vercel 的服务端环境变量中配置：
+普通网站功能不需要 Supabase。只有在要把正式实验数据上传到服务器时，才需要配置 Supabase。
 
-```text
-SUPABASE_URL=你的 Supabase Project URL
-SUPABASE_SERVICE_ROLE_KEY=你的 Supabase Service Role Key
-```
+### Supabase 配置步骤
 
-`SUPABASE_SERVICE_ROLE_KEY` 只能放在 Vercel 的服务端环境变量中，绝对不能提交到 GitHub、前端代码或公开文档。数据库表结构见：
+1. 在 Supabase 创建一个项目；
+2. 打开项目的 SQL Editor；
+3. 执行仓库中的完整 schema：
+
+   ```text
+   supabase/experiment-schema.sql
+   ```
+
+4. 确认四张实验表已创建，并且 RLS 已启用；
+5. 在 Vercel 项目的 **Settings → Environment Variables** 中添加：
+
+   ```text
+   SUPABASE_URL=你的 Supabase Project URL
+   SUPABASE_SERVICE_ROLE_KEY=你的 Supabase Service Role Key
+   ```
+
+6. 重新部署 Vercel 项目；
+7. 先用一条测试用正式实验记录验证上传，再开始邀请参与者。
+
+项目的浏览器端不会直接连接 Supabase。浏览器只请求 Vercel 的 `/api/experiment`，由 Vercel 服务端使用 `service_role` 写入 Supabase。数据库默认不向 `anon` 和 `authenticated` 角色开放实验表访问。
+
+`SUPABASE_SERVICE_ROLE_KEY` 只能放在 Vercel 的服务端环境变量中，绝对不能提交到 GitHub、前端代码或公开文档。数据库表结构和安全边界见：
 
 ```text
 supabase/experiment-schema.sql

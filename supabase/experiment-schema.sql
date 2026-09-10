@@ -64,3 +64,21 @@ create index if not exists experiment_trials_session_id_idx on experiment_trials
 create index if not exists experiment_trials_stimulus_id_idx on experiment_trials(stimulus_id);
 create index if not exists reader_trials_session_id_idx on reader_trials(session_id);
 create index if not exists reader_trials_passage_id_idx on reader_trials(passage_id);
+-- Security boundary:
+-- Formal experiment data is written only by the Vercel server function using
+-- Supabase's service_role key. It is never queried directly from the browser.
+-- RLS is enabled as defense in depth; no anon/authenticated policies are added.
+alter table public.experiment_sessions enable row level security;
+alter table public.experiment_trials enable row level security;
+alter table public.reader_trials enable row level security;
+alter table public.upload_receipts enable row level security;
+
+revoke all on table public.experiment_sessions from public, anon, authenticated;
+revoke all on table public.experiment_trials from public, anon, authenticated;
+revoke all on table public.reader_trials from public, anon, authenticated;
+revoke all on table public.upload_receipts from public, anon, authenticated;
+
+grant select, insert, update, delete on table public.experiment_sessions to service_role;
+grant select, insert, update, delete on table public.experiment_trials to service_role;
+grant select, insert, update, delete on table public.reader_trials to service_role;
+grant select, insert, update, delete on table public.upload_receipts to service_role;
