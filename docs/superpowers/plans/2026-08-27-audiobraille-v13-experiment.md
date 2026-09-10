@@ -560,8 +560,8 @@ npx vitest run tests/experiment-api.test.js
 - 解析 `{ batchId, studyVersion, sessions, trials, readerTrials }`；
 - 校验 session 同意标记、ID 格式、版本字段、数组长度和数值范围；
 - 丢弃未列入白名单的字段；
-- 使用 `SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY` 环境变量；
-- 服务端密钥只在 Function 内使用，不能进入前端 bundle；
+- 使用 `SUPABASE_URL` 和推荐的 `SUPABASE_SECRET_KEY` 环境变量（兼容旧的 `SUPABASE_SERVICE_ROLE_KEY`）；
+- 服务端密钥只在 Function 内使用，不能进入前端 bundle；新版 secret key 仅放在 `apikey` 请求头，不能作为 Bearer JWT 发送；
 - 对三个表使用 Supabase REST `POST`，以 `eventId`/`sessionId` 唯一约束处理重复上传；
 - 成功返回 `{ ok: true, batchId }`；
 - 配置缺失返回 503，校验失败返回 400，数据库失败返回 502。

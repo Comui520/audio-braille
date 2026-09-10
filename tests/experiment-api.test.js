@@ -45,6 +45,34 @@ function fakeDeps({ configured = true, fail = false } = {}) {
 }
 
 describe('实验 Vercel 接口', () => {
+  it('支持 Supabase 新版服务端 secret key 环境变量', async () => {
+    const previousUrl = process.env.SUPABASE_URL
+    const previousSecret = process.env.SUPABASE_SECRET_KEY
+    const previousLegacy = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const previousFetch = globalThis.fetch
+    const requests = []
+    process.env.SUPABASE_URL = 'https://example.supabase.co'
+    process.env.SUPABASE_SECRET_KEY = 'sb_secret_test'
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY
+    globalThis.fetch = async (url, options) => {
+      requests.push({ url, headers: options.headers })
+      return { ok: true, status: 201, async json() { return {} } }
+    }
+    try {
+      const response = await handleExperimentRequest(requestOf(validBatch()))
+      expect(response.status).toBe(200)
+      expect(requests[0].headers.apikey).toBe('sb_secret_test')
+      expect(requests[0].headers.Authorization).toBeUndefined()
+    } finally {
+      if (previousUrl === undefined) delete process.env.SUPABASE_URL
+      else process.env.SUPABASE_URL = previousUrl
+      if (previousSecret === undefined) delete process.env.SUPABASE_SECRET_KEY
+      else process.env.SUPABASE_SECRET_KEY = previousSecret
+      if (previousLegacy === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY
+      else process.env.SUPABASE_SERVICE_ROLE_KEY = previousLegacy
+      globalThis.fetch = previousFetch
+    }
+  })
   it('拒绝没有同意标记的 formal payload', async () => {
     const base = validBatch()
     const response = await handleExperimentRequest(requestOf({ ...base, sessions: [{ ...base.sessions[0], consentAccepted: false }] }), fakeDeps())

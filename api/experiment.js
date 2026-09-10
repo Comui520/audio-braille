@@ -158,7 +158,11 @@ function mapReaderTrial(trial) {
 
 function getDependencies(deps = {}) {
   const supabaseUrl = deps.supabaseUrl || globalThis.process?.env?.SUPABASE_URL || ''
-  const serviceRoleKey = deps.serviceRoleKey || globalThis.process?.env?.SUPABASE_SERVICE_ROLE_KEY || ''
+  const serviceRoleKey =
+    deps.serviceRoleKey ||
+    globalThis.process?.env?.SUPABASE_SECRET_KEY ||
+    globalThis.process?.env?.SUPABASE_SERVICE_ROLE_KEY ||
+    ''
   return {
     configured: deps.configured ?? Boolean(supabaseUrl && serviceRoleKey),
     supabaseUrl,
@@ -170,14 +174,20 @@ function getDependencies(deps = {}) {
 async function postTable(deps, table, conflictKey, rows) {
   if (!rows.length) return
   const url = `${deps.supabaseUrl.replace(/\/$/, '')}/rest/v1/${table}?on_conflict=${conflictKey}`
+  const headers = {
+    apikey: deps.serviceRoleKey,
+    'Content-Type': 'application/json',
+    Prefer: 'resolution=merge-duplicates,return=minimal'
+  }
+  // New sb_secret_* keys are API keys, not JWTs. Sending one as a bearer
+  // token makes Supabase try to parse an invalid JWT. Keep the legacy bearer
+  // header for the old service_role JWT compatibility path.
+  if (!/^sb_secret_/.test(deps.serviceRoleKey)) {
+    headers.Authorization = `Bearer ${deps.serviceRoleKey}`
+  }
   const result = await deps.fetch(url, {
     method: 'POST',
-    headers: {
-      apikey: deps.serviceRoleKey,
-      Authorization: `Bearer ${deps.serviceRoleKey}`,
-      'Content-Type': 'application/json',
-      Prefer: 'resolution=merge-duplicates,return=minimal'
-    },
+    headers,
     body: JSON.stringify(rows)
   })
   if (!result?.ok) throw new Error(`Supabase ${table} failed: ${result?.status || 0}`)

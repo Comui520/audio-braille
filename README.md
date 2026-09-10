@@ -181,15 +181,15 @@ npm run preview
 
    ```text
    SUPABASE_URL=你的 Supabase Project URL
-   SUPABASE_SERVICE_ROLE_KEY=你的 Supabase Service Role Key
+   SUPABASE_SECRET_KEY=你的 Supabase server-side secret key
    ```
 
 6. 重新部署 Vercel 项目；
 7. 先用一条测试用正式实验记录验证上传，再开始邀请参与者。
 
-项目的浏览器端不会直接连接 Supabase。浏览器只请求 Vercel 的 `/api/experiment`，由 Vercel 服务端使用 `service_role` 写入 Supabase。数据库默认不向 `anon` 和 `authenticated` 角色开放实验表访问。
+项目的浏览器端不会直接连接 Supabase。浏览器只请求 Vercel 的 `/api/experiment`，由 Vercel 服务端使用 secret key 写入 Supabase。新版 `sb_secret_*` key 只通过 `apikey` 请求头发送，旧版 `service_role` JWT 仍保持兼容。数据库默认不向 `anon` 和 `authenticated` 角色开放实验表访问。
 
-`SUPABASE_SERVICE_ROLE_KEY` 只能放在 Vercel 的服务端环境变量中，绝对不能提交到 GitHub、前端代码或公开文档。数据库表结构和安全边界见：
+推荐使用 Supabase 新版服务端密钥 `SUPABASE_SECRET_KEY`；旧的 `SUPABASE_SERVICE_ROLE_KEY` 仍可兼容。两者只能放在 Vercel 的服务端环境变量中，绝对不能提交到 GitHub、前端代码或公开文档，也不能使用 `VITE_` 前缀。数据库表结构和安全边界见：
 
 ```text
 supabase/experiment-schema.sql
